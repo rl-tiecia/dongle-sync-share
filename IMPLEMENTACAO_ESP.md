@@ -347,22 +347,193 @@ void loop() {
 }
 ```
 
-## Importante: Autenticação de Usuário
+## Importante: Autenticação de Usuário e Segurança
 
-⚠️ **ATENÇÃO**: O código acima usa a `ANON_KEY` que tem permissões limitadas pelo RLS.
+⚠️ **ATENÇÃO CRÍTICA DE SEGURANÇA**: 
 
-Para associar dispositivos a usuários, você tem duas opções:
+### Problema de Segurança Atual
+O código acima usa a `ANON_KEY` hardcoded no firmware do ESP32, o que cria uma **vulnerabilidade crítica de segurança**:
+- Qualquer pessoa com acesso ao firmware pode extrair a chave
+- Atacantes podem se passar por dispositivos legítimos
+- Dados falsos podem ser injetados para qualquer usuário
+- Não há autenticação real ao nível do dispositivo
 
-### Opção 1: Sistema de Claim (Recomendado)
-1. Dispositivo se registra sem user_id
-2. Usuário faz "claim" do dispositivo via código único no dashboard
-3. Sistema atualiza user_id no banco
+### ⚠️ NÃO USE EM PRODUÇÃO SEM IMPLEMENTAR UMA DAS SOLUÇÕES ABAIXO
 
-### Opção 2: Autenticação no Dispositivo
-1. Implementar fluxo OAuth no ESP32
-2. Usuário faz login via display do dispositivo
-3. Dispositivo obtém token de acesso
-4. Usa token nas requisições
+### Opção 1: Sistema de Claim com Device Token (RECOMENDADO)
+
+Esta é a solução mais segura e escalável:
+
+1. **Geração de Claim Code (Durante Fabricação/Setup)**
+```cpp
+// Gerar código único de 8 caracteres alfanuméricos
+String generateClaimCode() {
+  const char charset[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  String code = "";
+  for(int i = 0; i < 8; i++) {
+    code += charset[esp_random() % (sizeof(charset) - 1)];
+  }
+  return code;
+}
+
+String CLAIM_CODE = generateClaimCode(); // Ex: "A3K9P2X7"
+// Este código deve ser exibido no display do dispositivo ou impresso em etiqueta
+```
+
+2. **Registro Inicial sem user_id**
+```cpp
+bool registerDevice() {
+  // Dispositivo se registra sem user_id (null)
+  StaticJsonDocument<512> doc;
+  doc["device_id"] = DEVICE_ID;
+  doc["device_name"] = "T-Dongle-" + DEVICE_ID.substring(0, 6);
+  doc["mac_address"] = WiFi.macAddress();
+  doc["firmware_version"] = "1.0.0";
+  doc["claim_code"] = CLAIM_CODE; // Armazenar claim code
+  doc["is_claimed"] = false;
+  // user_id será null até o claim
+}
+```
+
+3. **Usuário Faz Claim via Dashboard**
+O usuário digita o código exibido no dispositivo. Backend valida e associa:
+```sql
+-- Edge Function ou RPC para validar claim
+CREATE OR REPLACE FUNCTION claim_device(p_claim_code TEXT)
+RETURNS json AS $$
+DECLARE
+  v_device_id UUID;
+  v_device_token TEXT;
+BEGIN
+  -- Validar claim code
+  SELECT id INTO v_device_id 
+  FROM devices 
+  WHERE claim_code = p_claim_code 
+    AND is_claimed = false 
+    AND user_id IS NULL;
+  
+  IF v_device_id IS NULL THEN
+    RETURN json_build_object('error', 'Código inválido ou já utilizado');
+  END IF;
+  
+  -- Gerar token único para o dispositivo
+  v_device_token := encode(gen_random_bytes(32), 'base64');
+  
+  -- Associar ao usuário atual
+  UPDATE devices 
+  SET user_id = auth.uid(),
+      is_claimed = true,
+      device_token = v_device_token,
+      claimed_at = now()
+  WHERE id = v_device_id;
+  
+  RETURN json_build_object(
+    'success', true, 
+    'device_id', v_device_id,
+    'device_token', v_device_token
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+4. **Dispositivo Recebe Token Exclusivo**
+```cpp
+void checkClaimStatus() {
+  // Periodicamente verificar se foi claimed
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/rest/v1/devices?device_id=eq." + DEVICE_ID + "&select=device_token,is_claimed";
+  
+  http.begin(url);
+  http.addHeader("apikey", SUPABASE_ANON_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  
+  int httpCode = http.GET();
+  if (httpCode == 200) {
+    String response = http.getString();
+    StaticJsonDocument<512> doc;
+    deserializeJson(doc, response);
+    
+    if (doc[0]["is_claimed"] == true) {
+      DEVICE_TOKEN = doc[0]["device_token"].as<String>();
+      // Salvar token na EEPROM/Flash
+      saveTokenToFlash(DEVICE_TOKEN);
+      Serial.println("Dispositivo vinculado! Token obtido.");
+    }
+  }
+  http.end();
+}
+```
+
+5. **Usar Token em Todas as Requisições Futuras**
+```cpp
+void updateDeviceStatus() {
+  if (DEVICE_TOKEN.isEmpty()) {
+    checkClaimStatus(); // Ainda não claimed
+    return;
+  }
+  
+  HTTPClient http;
+  http.begin(url);
+  // Usar device token ao invés de anon key
+  http.addHeader("apikey", SUPABASE_ANON_KEY);
+  http.addHeader("Authorization", String("Bearer ") + DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
+  // ...
+}
+```
+
+### Opção 2: Edge Function com Validação HMAC
+
+Criar Edge Function que valida assinaturas criptográficas:
+
+```typescript
+// Edge Function: verify-device-request
+import { createClient } from '@supabase/supabase-js'
+import { createHmac } from 'crypto'
+
+Deno.serve(async (req) => {
+  const { device_id, mac_address, timestamp, signature, data } = await req.json()
+  
+  // Buscar secret do dispositivo
+  const supabase = createClient(...)
+  const { data: device } = await supabase
+    .from('devices')
+    .select('device_secret, user_id')
+    .eq('device_id', device_id)
+    .single()
+  
+  // Validar HMAC signature
+  const payload = `${device_id}:${mac_address}:${timestamp}`
+  const expectedSignature = createHmac('sha256', device.device_secret)
+    .update(payload)
+    .digest('hex')
+  
+  if (signature !== expectedSignature) {
+    return new Response('Invalid signature', { status: 401 })
+  }
+  
+  // Validar timestamp (prevenir replay attacks)
+  if (Math.abs(Date.now() - timestamp) > 60000) { // 1 minuto
+    return new Response('Request expired', { status: 401 })
+  }
+  
+  // Processar dados autenticados
+  // ...
+})
+```
+
+### Migração de Banco Necessária
+
+Adicionar colunas de segurança à tabela devices:
+
+```sql
+ALTER TABLE devices 
+ADD COLUMN claim_code TEXT UNIQUE,
+ADD COLUMN is_claimed BOOLEAN DEFAULT false,
+ADD COLUMN claimed_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN device_token TEXT UNIQUE,
+ADD COLUMN device_secret TEXT; -- Para HMAC
+```
 
 ## Próximos Passos
 
