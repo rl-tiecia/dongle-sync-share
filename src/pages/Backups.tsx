@@ -2,55 +2,56 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { DeviceSelector } from "@/components/DeviceSelector";
+import { useDevices } from "@/hooks/useDevices";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Backups = () => {
-  // Dados simulados
-  const backups = [
-    {
-      id: 1,
-      filename: "backup_20240115_1423.dat",
-      size: "125.4 MB",
-      date: "2024-01-15 14:23:00",
-      status: "success",
-      destination: "\\\\servidor\\backups\\maquina01",
-    },
-    {
-      id: 2,
-      filename: "backup_20240115_1015.dat",
-      size: "122.8 MB",
-      date: "2024-01-15 10:15:00",
-      status: "success",
-      destination: "\\\\servidor\\backups\\maquina01",
-    },
-    {
-      id: 3,
-      filename: "backup_20240114_1630.dat",
-      size: "128.1 MB",
-      date: "2024-01-14 16:30:00",
-      status: "success",
-      destination: "\\\\servidor\\backups\\maquina01",
-    },
-    {
-      id: 4,
-      filename: "backup_20240114_1200.dat",
-      size: "124.5 MB",
-      date: "2024-01-14 12:00:00",
-      status: "pending",
-      destination: "\\\\servidor\\backups\\maquina01",
-    },
-    {
-      id: 5,
-      filename: "backup_20240113_1845.dat",
-      size: "127.2 MB",
-      date: "2024-01-13 18:45:00",
-      status: "error",
-      destination: "\\\\servidor\\backups\\maquina01",
-    },
-  ];
+  const { devices, selectedDevice, setSelectedDevice, loading } = useDevices();
+  const [backups, setBackups] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!selectedDevice) return;
+
+    const fetchBackups = async () => {
+      const { data } = await supabase
+        .from("device_backups")
+        .select("*")
+        .eq("device_id", selectedDevice.id)
+        .order("created_at", { ascending: false });
+
+      setBackups(data || []);
+    };
+
+    fetchBackups();
+
+    const channel = supabase
+      .channel(`backups-${selectedDevice.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "device_backups",
+          filter: `device_id=eq.${selectedDevice.id}`,
+        },
+        () => fetchBackups()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedDevice]);
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Carregando...</div>;
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "success":
+      case "completed":
         return (
           <Badge variant="outline" className="bg-success/10 text-success border-success/20">
             <CheckCircle2 className="mr-1 h-3 w-3" />
@@ -64,7 +65,7 @@ const Backups = () => {
             Pendente
           </Badge>
         );
-      case "error":
+      case "failed":
         return (
           <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
             <AlertCircle className="mr-1 h-3 w-3" />
@@ -85,6 +86,12 @@ const Backups = () => {
         </p>
       </div>
 
+      <DeviceSelector
+        devices={devices}
+        selectedDevice={selectedDevice}
+        onDeviceSelect={setSelectedDevice}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Arquivos de Backup</CardTitle>
@@ -104,15 +111,23 @@ const Backups = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {backups.map((backup) => (
-                <TableRow key={backup.id}>
-                  <TableCell className="font-medium">{backup.filename}</TableCell>
-                  <TableCell>{backup.size}</TableCell>
-                  <TableCell>{backup.date}</TableCell>
-                  <TableCell className="font-mono text-xs">{backup.destination}</TableCell>
-                  <TableCell>{getStatusBadge(backup.status)}</TableCell>
+              {backups.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Nenhum backup registrado
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                backups.map((backup) => (
+                  <TableRow key={backup.id}>
+                    <TableCell className="font-medium">{backup.filename}</TableCell>
+                    <TableCell>{backup.file_size_mb ? `${backup.file_size_mb} MB` : "N/A"}</TableCell>
+                    <TableCell>{new Date(backup.created_at).toLocaleString("pt-BR")}</TableCell>
+                    <TableCell className="font-mono text-xs">{backup.destination || "N/A"}</TableCell>
+                    <TableCell>{getStatusBadge(backup.status)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

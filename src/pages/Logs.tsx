@@ -1,71 +1,53 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DeviceSelector } from "@/components/DeviceSelector";
+import { useDevices } from "@/hooks/useDevices";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Logs = () => {
-  // Dados simulados
-  const logs = [
-    {
-      id: 1,
-      timestamp: "2024-01-15 14:23:45",
-      level: "info",
-      message: "Arquivo backup_20240115_1423.dat transferido com sucesso",
-    },
-    {
-      id: 2,
-      timestamp: "2024-01-15 14:23:30",
-      level: "info",
-      message: "Iniciando transferência para \\\\servidor\\backups\\maquina01",
-    },
-    {
-      id: 3,
-      timestamp: "2024-01-15 14:23:15",
-      level: "info",
-      message: "Novo arquivo detectado: backup_20240115_1423.dat (125.4 MB)",
-    },
-    {
-      id: 4,
-      timestamp: "2024-01-15 14:23:10",
-      level: "info",
-      message: "Pendrive detectado na porta USB",
-    },
-    {
-      id: 5,
-      timestamp: "2024-01-15 10:15:52",
-      level: "info",
-      message: "Arquivo backup_20240115_1015.dat transferido com sucesso",
-    },
-    {
-      id: 6,
-      timestamp: "2024-01-15 10:15:35",
-      level: "info",
-      message: "Novo arquivo detectado: backup_20240115_1015.dat (122.8 MB)",
-    },
-    {
-      id: 7,
-      timestamp: "2024-01-14 18:45:23",
-      level: "error",
-      message: "Erro ao transferir arquivo: Rede não disponível",
-    },
-    {
-      id: 8,
-      timestamp: "2024-01-14 18:45:10",
-      level: "warning",
-      message: "Tentando reconexão com a rede (tentativa 3/3)",
-    },
-    {
-      id: 9,
-      timestamp: "2024-01-14 18:44:45",
-      level: "warning",
-      message: "Falha na conexão de rede, tentando novamente...",
-    },
-    {
-      id: 10,
-      timestamp: "2024-01-14 16:30:15",
-      level: "info",
-      message: "Display atualizado: Transfer Complete",
-    },
-  ];
+  const { devices, selectedDevice, setSelectedDevice, loading } = useDevices();
+  const [logs, setLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!selectedDevice) return;
+
+    const fetchLogs = async () => {
+      const { data } = await supabase
+        .from("device_logs")
+        .select("*")
+        .eq("device_id", selectedDevice.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      setLogs(data || []);
+    };
+
+    fetchLogs();
+
+    const channel = supabase
+      .channel(`logs-${selectedDevice.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "device_logs",
+          filter: `device_id=eq.${selectedDevice.id}`,
+        },
+        () => fetchLogs()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedDevice]);
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Carregando...</div>;
+  }
 
   const getLevelBadge = (level: string) => {
     switch (level) {
@@ -89,6 +71,12 @@ const Logs = () => {
         </p>
       </div>
 
+      <DeviceSelector
+        devices={devices}
+        selectedDevice={selectedDevice}
+        onDeviceSelect={setSelectedDevice}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Log de Atividades</CardTitle>
@@ -98,20 +86,28 @@ const Logs = () => {
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[600px] w-full rounded-md border p-4">
-            <div className="space-y-3">
-              {logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
-                >
-                  <div className="mt-0.5">{getLevelBadge(log.level)}</div>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-mono">{log.message}</p>
-                    <p className="text-xs text-muted-foreground">{log.timestamp}</p>
+            {logs.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Nenhum log disponível
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="mt-0.5">{getLevelBadge(log.log_level)}</div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-mono">{log.message}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(log.created_at).toLocaleString("pt-BR")}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </ScrollArea>
         </CardContent>
       </Card>
