@@ -9,6 +9,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Download } from "lucide-react";
+import { generateESP32Code, generateClaimCode } from "@/utils/generateESP32Code";
+import { supabase } from "@/integrations/supabase/client";
 
 const settingsSchema = z.object({
   wifiSsid: z.string()
@@ -57,6 +60,72 @@ const Settings = () => {
   const handleSave = (data: SettingsFormValues) => {
     console.log("Validated settings:", data);
     toast.success("Configurações salvas com sucesso!");
+  };
+
+  const handleDownloadCode = async () => {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error("Corrija os erros no formulário antes de baixar o código");
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Você precisa estar autenticado");
+        return;
+      }
+
+      const claimCode = generateClaimCode();
+      const formValues = form.getValues();
+
+      // Criar claim no banco
+      const { error: claimError } = await supabase
+        .from('device_claims')
+        .insert({
+          user_id: user.id,
+          claim_code: claimCode.replace('-', ''),
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 horas
+        });
+
+      if (claimError) {
+        console.error("Erro ao criar claim:", claimError);
+        toast.error("Erro ao gerar código de vinculação");
+        return;
+      }
+
+      // Gerar código ESP32
+      const code = generateESP32Code({
+        wifiSsid: formValues.wifiSsid,
+        wifiPassword: formValues.wifiPassword,
+        networkPath: formValues.networkPath,
+        username: formValues.username,
+        password: formValues.password,
+        checkInterval: formValues.checkInterval,
+        deleteAfter: formValues.deleteAfter,
+        displayEnabled: formValues.displayEnabled,
+        claimCode: claimCode.replace('-', '')
+      });
+
+      // Download do arquivo
+      const blob = new Blob([code], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `T-Dongle-Config-${claimCode}.ino`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Código baixado! Código de vinculação: ${claimCode}`, {
+        duration: 8000,
+        description: "Carregue o arquivo no Arduino IDE e grave no ESP32"
+      });
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao baixar código");
+    }
   };
 
   return (
@@ -238,6 +307,37 @@ const Settings = () => {
                 </FormItem>
               )}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Código para ESP32</CardTitle>
+            <CardDescription>
+              Baixe o firmware configurado para seu T-Dongle S3
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
+              <p className="font-medium">Instruções:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Preencha as configurações acima</li>
+                <li>Clique em "Baixar Código para ESP32"</li>
+                <li>Abra o arquivo .ino no Arduino IDE</li>
+                <li>Conecte seu T-Dongle S3 via USB</li>
+                <li>Selecione a placa "ESP32-S3 Dev Module"</li>
+                <li>Compile e grave o firmware</li>
+                <li>O código de vinculação aparecerá no display</li>
+              </ol>
+            </div>
+            <Button 
+              type="button" 
+              onClick={handleDownloadCode}
+              className="w-full"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Baixar Código para ESP32
+            </Button>
           </CardContent>
         </Card>
 

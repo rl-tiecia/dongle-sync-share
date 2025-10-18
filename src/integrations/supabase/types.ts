@@ -55,6 +55,36 @@ export type Database = {
           },
         ]
       }
+      device_claims: {
+        Row: {
+          claim_code: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          is_used: boolean | null
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          claim_code: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          is_used?: boolean | null
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          claim_code?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          is_used?: boolean | null
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       device_logs: {
         Row: {
           created_at: string
@@ -133,11 +163,15 @@ export type Database = {
       }
       devices: {
         Row: {
+          claim_code: string | null
+          claimed_at: string | null
           created_at: string
           device_id: string
           device_name: string
+          device_token: string | null
           firmware_version: string | null
           id: string
+          is_claimed: boolean | null
           is_online: boolean | null
           last_seen_at: string | null
           mac_address: string | null
@@ -145,11 +179,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          claim_code?: string | null
+          claimed_at?: string | null
           created_at?: string
           device_id: string
           device_name: string
+          device_token?: string | null
           firmware_version?: string | null
           id?: string
+          is_claimed?: boolean | null
           is_online?: boolean | null
           last_seen_at?: string | null
           mac_address?: string | null
@@ -157,11 +195,15 @@ export type Database = {
           user_id: string
         }
         Update: {
+          claim_code?: string | null
+          claimed_at?: string | null
           created_at?: string
           device_id?: string
           device_name?: string
+          device_token?: string | null
           firmware_version?: string | null
           id?: string
+          is_claimed?: boolean | null
           is_online?: boolean | null
           last_seen_at?: string | null
           mac_address?: string | null
@@ -175,10 +217,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_claims: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      claim_status: "pending" | "used" | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -305,6 +350,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      claim_status: ["pending", "used", "expired"],
+    },
   },
 } as const

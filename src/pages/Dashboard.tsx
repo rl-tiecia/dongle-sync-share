@@ -3,17 +3,19 @@ import { DeviceSelector } from "@/components/DeviceSelector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle, Plus } from "lucide-react";
+import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle, Plus, Link } from "lucide-react";
 import { useDevices, useDeviceStatus } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { simulateDevice } from "@/utils/simulateDevice";
 import { toast } from "sonner";
+import { AddDeviceModal } from "@/components/AddDeviceModal";
 
 const Dashboard = () => {
-  const { devices, selectedDevice, setSelectedDevice, loading } = useDevices();
+  const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const { status } = useDeviceStatus(selectedDevice?.id);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [showAddDevice, setShowAddDevice] = useState(false);
 
   useEffect(() => {
     if (!selectedDevice) return;
@@ -78,12 +80,23 @@ const Dashboard = () => {
             <p className="text-muted-foreground">
               Nenhum dispositivo registrado. Configure seu T-Dongle S3 para começar.
             </p>
-            <Button onClick={handleSimulateDevice} variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Criar Dispositivo Demo
-            </Button>
+            <div className="flex gap-3 justify-center">
+              <Button onClick={() => setShowAddDevice(true)}>
+                <Link className="mr-2 h-4 w-4" />
+                Adicionar Dispositivo
+              </Button>
+              <Button onClick={handleSimulateDevice} variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Criar Dispositivo Demo
+              </Button>
+            </div>
           </CardContent>
         </Card>
+        <AddDeviceModal 
+          open={showAddDevice} 
+          onOpenChange={setShowAddDevice}
+          onDeviceAdded={refetch}
+        />
       </div>
     );
   }
@@ -98,11 +111,17 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Monitoramento em tempo real dos dispositivos T-Dongle S3
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Monitoramento em tempo real dos dispositivos T-Dongle S3
+          </p>
+        </div>
+        <Button onClick={() => setShowAddDevice(true)}>
+          <Link className="mr-2 h-4 w-4" />
+          Adicionar Dispositivo
+        </Button>
       </div>
 
       {/* Device Selector */}
@@ -240,6 +259,12 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      <AddDeviceModal 
+        open={showAddDevice} 
+        onOpenChange={setShowAddDevice}
+        onDeviceAdded={refetch}
+      />
     </div>
   );
 };
