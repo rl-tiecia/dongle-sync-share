@@ -2,10 +2,13 @@ import { StatusCard } from "@/components/StatusCard";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle, Plus } from "lucide-react";
 import { useDevices, useDeviceStatus } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { simulateDevice } from "@/utils/simulateDevice";
+import { toast } from "sonner";
 
 const Dashboard = () => {
   const { devices, selectedDevice, setSelectedDevice, loading } = useDevices();
@@ -51,6 +54,16 @@ const Dashboard = () => {
     return <div className="flex items-center justify-center h-64">Carregando...</div>;
   }
 
+  const handleSimulateDevice = async () => {
+    try {
+      toast.loading("Criando dispositivo demo...");
+      await simulateDevice();
+      toast.success("Dispositivo demo criado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao criar dispositivo demo");
+    }
+  };
+
   if (devices.length === 0) {
     return (
       <div className="space-y-6">
@@ -61,10 +74,14 @@ const Dashboard = () => {
           </p>
         </div>
         <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">
+          <CardContent className="p-6 text-center space-y-4">
+            <p className="text-muted-foreground">
               Nenhum dispositivo registrado. Configure seu T-Dongle S3 para começar.
             </p>
+            <Button onClick={handleSimulateDevice} variant="outline">
+              <Plus className="mr-2 h-4 w-4" />
+              Criar Dispositivo Demo
+            </Button>
           </CardContent>
         </Card>
       </div>
