@@ -17,7 +17,7 @@ export function generateESP32Code(config: ESP32Config): string {
   return `/*
  * T-Dongle S3 - Firmware de Backup Automático
  * Gerado automaticamente via Dashboard
- * Claim Code: ${config.claimCode}
+ * Claim Code: Será o MAC address do dispositivo
  */
 
 #include <WiFi.h>
@@ -43,7 +43,6 @@ const bool DISPLAY_ENABLED = ${config.displayEnabled ? 'true' : 'false'};
 // ========== CONFIGURAÇÕES SUPABASE ==========
 const char* SUPABASE_URL = "${SUPABASE_URL}";
 const char* SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";
-const char* CLAIM_CODE = "${config.claimCode}";
 
 // ========== VARIÁVEIS GLOBAIS ==========
 String DEVICE_ID;
@@ -74,20 +73,16 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
   }
   
-  // Gerar ID único do dispositivo
-  uint8_t mac[6];
-  esp_read_mac(mac, ESP_MAC_WIFI_STA);
-  DEVICE_ID = "";
-  for(int i = 0; i < 6; i++) {
-    if (mac[i] < 16) DEVICE_ID += "0";
-    DEVICE_ID += String(mac[i], HEX);
-  }
+  // Gerar ID único do dispositivo (MAC Address)
+  String macStr = WiFi.macAddress();
+  macStr.replace(":", "");
+  DEVICE_ID = macStr;
   DEVICE_ID.toUpperCase();
   
   Serial.println("=================================");
   Serial.println("T-Dongle S3 - Sistema de Backup");
-  Serial.println("Device ID: " + DEVICE_ID);
-  Serial.println("Claim Code: " + String(CLAIM_CODE));
+  Serial.println("Device ID (MAC): " + DEVICE_ID);
+  Serial.println("Claim Code (MAC): " + DEVICE_ID);
   Serial.println("=================================");
   
   // Conectar WiFi
@@ -151,7 +146,7 @@ bool registerDevice() {
   doc["mac_address"] = WiFi.macAddress();
   doc["firmware_version"] = "1.0.0";
   doc["is_online"] = true;
-  doc["claim_code"] = CLAIM_CODE;
+  doc["claim_code"] = DEVICE_ID; // Claim code é o MAC address
   doc["is_claimed"] = false;
   
   String jsonBody;
@@ -212,7 +207,7 @@ void checkClaimStatus() {
         sendLog("info", "Dispositivo vinculado com sucesso");
       } else {
         Serial.println("Aguardando vinculação do usuário...");
-        Serial.println("Exiba o código: " + String(CLAIM_CODE));
+        Serial.println("Exiba o código (MAC): " + DEVICE_ID);
       }
     }
   }
@@ -376,9 +371,9 @@ void displayClaimScreen() {
   tft.println("insira o código:");
   
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-  tft.setTextSize(3);
-  tft.setCursor(20, 90);
-  tft.println(CLAIM_CODE);
+  tft.setTextSize(2);
+  tft.setCursor(10, 90);
+  tft.println(DEVICE_ID);
   
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.setTextSize(1);
