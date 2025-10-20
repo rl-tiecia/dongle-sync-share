@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Download } from "lucide-react";
-import { generateESP32Code, generateClaimCode } from "@/utils/generateESP32Code";
+import { generateESP32Code } from "@/utils/generateESP32Code";
 import { supabase } from "@/integrations/supabase/client";
 
 const settingsSchema = z.object({
@@ -76,25 +76,9 @@ const Settings = () => {
         return;
       }
 
-      const claimCode = generateClaimCode();
       const formValues = form.getValues();
 
-      // Criar claim no banco
-      const { error: claimError } = await supabase
-        .from('device_claims')
-        .insert({
-          user_id: user.id,
-          claim_code: claimCode.replace('-', ''),
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 horas
-        });
-
-      if (claimError) {
-        console.error("Erro ao criar claim:", claimError);
-        toast.error("Erro ao gerar código de vinculação");
-        return;
-      }
-
-      // Gerar código ESP32
+      // Gerar código ESP32 (claim code será o MAC do próprio dispositivo)
       const code = generateESP32Code({
         wifiSsid: formValues.wifiSsid,
         wifiPassword: formValues.wifiPassword,
@@ -104,21 +88,21 @@ const Settings = () => {
         checkInterval: formValues.checkInterval,
         deleteAfter: formValues.deleteAfter,
         displayEnabled: formValues.displayEnabled,
-        claimCode: claimCode.replace('-', '')
       });
 
       // Download do arquivo
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       const blob = new Blob([code], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `T-Dongle-Config-${claimCode}.ino`;
+      a.download = `T-Dongle-S3-${timestamp}.ino`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Código baixado! Código de vinculação: ${claimCode}`, {
+      toast.success("Firmware gerado! O código de vinculação será o endereço MAC exibido no display.", {
         duration: 8000,
         description: "Carregue o arquivo no Arduino IDE e grave no ESP32"
       });
@@ -314,7 +298,7 @@ const Settings = () => {
           <CardHeader>
             <CardTitle>Código para ESP32</CardTitle>
             <CardDescription>
-              Baixe o firmware configurado para seu T-Dongle S3
+              Baixe o firmware pré-configurado. Após gravar, o dispositivo exibirá o endereço MAC que você usará para vinculá-lo.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -327,7 +311,7 @@ const Settings = () => {
                 <li>Conecte seu T-Dongle S3 via USB</li>
                 <li>Selecione a placa "ESP32-S3 Dev Module"</li>
                 <li>Compile e grave o firmware</li>
-                <li>O código de vinculação aparecerá no display</li>
+                <li>O endereço MAC (12 caracteres hexadecimais) aparecerá no display - use-o para vincular o dispositivo</li>
               </ol>
             </div>
             <Button 

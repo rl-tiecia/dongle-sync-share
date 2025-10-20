@@ -7,7 +7,7 @@ interface ESP32Config {
   checkInterval: number;
   deleteAfter: boolean;
   displayEnabled: boolean;
-  claimCode: string;
+  // claimCode removido - dispositivo usa MAC address como identificador único
 }
 
 const SUPABASE_URL = "https://eoqlgszxbiezdfmsakxq.supabase.co";
@@ -532,14 +532,4 @@ void loop() {
   delay(CHECK_INTERVAL * 1000);
 }
 `;
-}
-
-export function generateClaimCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i === 3) code += '-'; // Formato: XXXX-XXXX
-  }
-  return code;
 }
