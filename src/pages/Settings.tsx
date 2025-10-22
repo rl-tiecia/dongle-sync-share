@@ -298,7 +298,10 @@ const Settings = () => {
           <CardHeader>
             <CardTitle>Código para ESP32</CardTitle>
             <CardDescription>
-              Baixe o firmware pré-configurado. Após gravar, o dispositivo exibirá o endereço MAC que você usará para vinculá-lo.
+              Baixe o firmware pré-configurado. IMPORTANTE: Antes de gravar, verifique os 
+              pinos do display no código gerado (linhas 50-95) e ajuste conforme o 
+              esquemático do seu T-Dongle-S3. Se o dispositivo reiniciar infinitamente, 
+              descomente a linha DEBUG_MODE_NO_DISPLAY para testar sem display.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

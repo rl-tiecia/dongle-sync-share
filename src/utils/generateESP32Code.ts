@@ -15,11 +15,93 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export function generateESP32Code(config: ESP32Config): string {
   return `/*
+ * ============================================
  * T-Dongle S3 - Firmware de Backup Automático
+ * ============================================
+ * 
+ * CONFIGURAÇÃO NO ARDUINO IDE:
+ * 
+ * 1. Placa: "ESP32S3 Dev Module"
+ * 2. Upload Speed: "921600"
+ * 3. USB Mode: "Hardware CDC and JTAG"
+ * 4. USB CDC On Boot: "Enabled"
+ * 5. USB Firmware MSC On Boot: "Disabled"
+ * 6. USB DFU On Boot: "Disabled"
+ * 7. Upload Mode: "UART0 / Hardware CDC"
+ * 8. CPU Frequency: "240MHz (WiFi)"
+ * 9. Flash Mode: "QIO 80MHz"
+ * 10. Flash Size: "4MB (32Mb)"
+ * 11. Partition Scheme: "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+ * 12. Core Debug Level: "None" (ou "Info" para debug)
+ * 13. PSRAM: "Disabled" (a menos que seu T-Dongle tenha PSRAM)
+ * 14. Events Run On: "Core 1"
+ * 15. Arduino Runs On: "Core 1"
+ * 
+ * BIBLIOTECAS NECESSÁRIAS:
+ * - TFT_eSPI (by Bodmer) - versão 2.5.0 ou superior
+ * - ArduinoJson - versão 6.21.0 ou superior
+ * 
+ * PINOS DO T-DONGLE-S3:
+ * Os pinos estão configurados abaixo. Se o display não funcionar:
+ * 1. Verifique o esquemático oficial: https://github.com/Xinyuan-LilyGO/T-Dongle-S3
+ * 2. Ajuste os valores de TFT_MOSI, TFT_SCLK, etc.
+ * 
+ * TROUBLESHOOTING:
+ * - Boot loop infinito: Verifique os pinos do display
+ * - Tela preta: Verifique TFT_BL (backlight) e TFT_RGB_ORDER
+ * - Não compila: Instale as bibliotecas necessárias
+ * - WiFi não conecta: Verifique SSID e senha
+ * 
  * Gerado automaticamente via Dashboard
- * Claim Code: Será o MAC address do dispositivo
+ * Claim Code: MAC address do dispositivo
  */
 
+// ========== DEBUG MODE ==========
+// Descomente esta linha para desabilitar display durante debug
+// #define DEBUG_MODE_NO_DISPLAY
+
+// ========== CONFIGURAÇÃO DO DISPLAY ST7735 ==========
+// IMPORTANTE: Estes pinos são para o T-Dongle-S3
+// Verifique o esquemático do seu dispositivo se houver problemas
+
+#define USER_SETUP_LOADED 1
+
+// Driver do display
+#define ST7735_DRIVER
+
+// Pinos SPI do T-Dongle-S3 (ESP32-S3)
+#define TFT_MOSI 3    // Verifique esquemático
+#define TFT_SCLK 2    // Verifique esquemático  
+#define TFT_CS   4    // Chip Select
+#define TFT_DC   5    // Data/Command
+#define TFT_RST  1    // Reset (-1 se conectado ao RST do ESP)
+#define TFT_BL   38   // Backlight
+
+// Configuração do backlight
+#define TFT_BACKLIGHT_ON HIGH
+
+// Dimensões do display
+#define TFT_WIDTH  80
+#define TFT_HEIGHT 160
+
+// Ordem de cores (pode ser TFT_RGB ou TFT_BGR)
+#define TFT_RGB_ORDER TFT_BGR
+
+// Fontes
+#define LOAD_GLCD
+#define LOAD_FONT2
+#define LOAD_FONT4
+#define LOAD_GFXFF
+#define SMOOTH_FONT
+
+// Frequências SPI
+#define SPI_FREQUENCY  27000000
+#define SPI_READ_FREQUENCY  20000000
+
+// CRÍTICO para ESP32-S3: usar porta HSPI
+#define USE_HSPI_PORT
+
+// ========== BIBLIOTECAS ==========
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -38,7 +120,12 @@ const char* NETWORK_PASSWORD = "${config.password}";
 // ========== CONFIGURAÇÕES DO DISPOSITIVO ==========
 const int CHECK_INTERVAL = ${config.checkInterval}; // segundos
 const bool DELETE_AFTER_TRANSFER = ${config.deleteAfter ? 'true' : 'false'};
-const bool DISPLAY_ENABLED = ${config.displayEnabled ? 'true' : 'false'};
+
+#ifdef DEBUG_MODE_NO_DISPLAY
+  const bool DISPLAY_ENABLED = false;
+#else
+  const bool DISPLAY_ENABLED = ${config.displayEnabled ? 'true' : 'false'};
+#endif
 
 // ========== CONFIGURAÇÕES SUPABASE ==========
 const char* SUPABASE_URL = "${SUPABASE_URL}";
@@ -65,13 +152,36 @@ unsigned long lastDisplayUpdate = 0;
 // ========== SETUP ==========
 void setup() {
   Serial.begin(115200);
+  delay(1000); // Dar tempo para ESP32-S3 estabilizar
   
-  // Inicializar display
+  Serial.println("\\n\\n=================================");
+  Serial.println("T-Dongle S3 - Sistema de Backup");
+  Serial.println("Inicializando...");
+  
+  // Inicializar display COM TRATAMENTO DE ERRO
   if (DISPLAY_ENABLED) {
+    Serial.println("Inicializando display...");
+    
+    // Ativar backlight primeiro
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);
+    
+    delay(100); // Delay antes de inicializar TFT
+    
     tft.init();
-    tft.setRotation(1);
+    tft.setRotation(1); // Landscape
     tft.fillScreen(TFT_BLACK);
+    
+    // Teste básico
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setCursor(5, 5);
+    tft.setTextSize(1);
+    tft.println("Display OK");
+    
+    Serial.println("Display inicializado!");
   }
+  
+  delay(500); // Delay antes de WiFi
   
   // Gerar ID único do dispositivo (MAC Address)
   String macStr = WiFi.macAddress();
@@ -80,7 +190,6 @@ void setup() {
   DEVICE_ID.toUpperCase();
   
   Serial.println("=================================");
-  Serial.println("T-Dongle S3 - Sistema de Backup");
   Serial.println("Device ID (MAC): " + DEVICE_ID);
   Serial.println("Claim Code (MAC): " + DEVICE_ID);
   Serial.println("=================================");
@@ -218,9 +327,13 @@ void checkClaimStatus() {
 // ========== HEARTBEAT TASK ==========
 void heartbeatTask(void* parameter) {
   while (true) {
+    // Feed watchdog
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    
     // Verificar conexão WiFi
     if (WiFi.status() != WL_CONNECTED) {
       wifiConnected = false;
+      Serial.println("WiFi desconectado, reconectando...");
       connectWiFi();
     } else {
       wifiConnected = true;
@@ -337,6 +450,9 @@ void registerBackup(String filename, float sizeMB, String destination) {
 // ========== DISPLAY TASK ==========
 void displayTask(void* parameter) {
   while (DISPLAY_ENABLED) {
+    // Feed watchdog
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    
     if (millis() - lastDisplayUpdate > 5000) {
       if (!isClaimed) {
         displayClaimScreen();
