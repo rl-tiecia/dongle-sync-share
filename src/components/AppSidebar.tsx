@@ -40,10 +40,8 @@ export function AppSidebar() {
                       end
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-2 w-full px-2 py-1.5 rounded-md transition-colors",
-                          isActive
-                            ? "bg-primary/20 text-primary font-semibold border-l-4 border-primary [&>svg]:text-primary"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground border-l-4 border-transparent"
+                          "flex items-center gap-2 w-full",
+                          isActive && "bg-sidebar-accent"
                         )
                       }
                     >
