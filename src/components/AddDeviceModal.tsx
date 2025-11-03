@@ -39,50 +39,25 @@ export function AddDeviceModal({ open, onOpenChange, onDeviceAdded }: AddDeviceM
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         toast.error("Você precisa estar autenticado");
         return;
       }
 
-      // Buscar dispositivo com este claim code
-      const { data: devices, error: searchError } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('claim_code', cleanCode)
-        .eq('is_claimed', false)
-        .is('user_id', null);
+      // Chamar edge function para vincular dispositivo
+      const { data, error } = await supabase.functions.invoke('device-claim', {
+        body: { claim_code: cleanCode }
+      });
 
-      if (searchError) {
-        console.error("Erro ao buscar dispositivo:", searchError);
-        toast.error("Erro ao buscar dispositivo");
+      if (error) {
+        console.error("Erro ao vincular:", error);
+        toast.error(error.message || "Erro ao vincular dispositivo");
         return;
       }
 
-      if (!devices || devices.length === 0) {
-        toast.error("Código inválido ou já utilizado");
-        return;
-      }
-
-      const device = devices[0];
-
-      // Gerar token único para o dispositivo
-      const deviceToken = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
-
-      // Vincular dispositivo ao usuário
-      const { error: updateError } = await supabase
-        .from('devices')
-        .update({
-          user_id: user.id,
-          is_claimed: true,
-          claimed_at: new Date().toISOString(),
-          device_token: deviceToken
-        })
-        .eq('id', device.id);
-
-      if (updateError) {
-        console.error("Erro ao vincular dispositivo:", updateError);
-        toast.error("Erro ao vincular dispositivo");
+      if (data?.error) {
+        toast.error(data.error);
         return;
       }
 

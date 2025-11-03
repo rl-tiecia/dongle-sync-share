@@ -129,13 +129,14 @@ const bool DELETE_AFTER_TRANSFER = ${config.deleteAfter ? 'true' : 'false'};
 
 // ========== CONFIGURAÇÕES SUPABASE ==========
 const char* SUPABASE_URL = "${SUPABASE_URL}";
-const char* SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}";
 
 // ========== VARIÁVEIS GLOBAIS ==========
 String DEVICE_ID;
 String deviceUUID;
 String DEVICE_TOKEN;
 bool isClaimed = false;
+#include <Preferences.h>
+Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
 
 // Status do dispositivo
@@ -236,88 +237,71 @@ void connectWiFi() {
   }
 }
 
-// ========== REGISTRO DO DISPOSITIVO ==========
+// ========== REGISTRO DO DISPOSITIVO (via Edge Function) ==========
 bool registerDevice() {
   if (!wifiConnected) return false;
   
   HTTPClient http;
-  String url = String(SUPABASE_URL) + "/rest/v1/devices";
+  String url = String(SUPABASE_URL) + "/functions/v1/device-register";
   
   http.begin(url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Prefer", "return=representation");
   
-  StaticJsonDocument<512> doc;
-  doc["device_id"] = DEVICE_ID;
-  doc["device_name"] = "T-Dongle-" + DEVICE_ID.substring(0, 6);
-  doc["mac_address"] = WiFi.macAddress();
+  StaticJsonDocument<256> doc;
+  doc["mac_address"] = DEVICE_ID;
   doc["firmware_version"] = "1.0.0";
-  doc["is_online"] = true;
-  doc["claim_code"] = DEVICE_ID; // Claim code é o MAC address
-  doc["is_claimed"] = false;
   
   String jsonBody;
   serializeJson(doc, jsonBody);
   
-  Serial.println("Registrando dispositivo...");
+  Serial.println("Registrando dispositivo via Edge Function...");
   int httpCode = http.POST(jsonBody);
   
-  if (httpCode > 0) {
+  if (httpCode == 200) {
     String response = http.getString();
-    Serial.println("Resposta registro: " + String(httpCode));
+    Serial.println("Resposta: " + response);
     
-    if (httpCode == 201 || httpCode == 200) {
-      StaticJsonDocument<1024> responseDoc;
-      deserializeJson(responseDoc, response);
-      
-      if (responseDoc.is<JsonArray>()) {
-        JsonArray arr = responseDoc.as<JsonArray>();
-        if (arr.size() > 0) {
-          deviceUUID = arr[0]["id"].as<String>();
-          Serial.println("Device UUID: " + deviceUUID);
-        }
-      }
-    }
+    StaticJsonDocument<512> responseDoc;
+    deserializeJson(responseDoc, response);
+    
+    deviceUUID = responseDoc["device_uuid"].as<String>();
+    Serial.println("Device UUID: " + deviceUUID);
+    
+    http.end();
+    return true;
   } else {
-    Serial.println("Erro no registro: " + String(httpCode));
+    Serial.println("Erro: " + String(httpCode));
+    http.end();
+    return false;
   }
-  
-  http.end();
-  return httpCode == 201 || httpCode == 200;
 }
 
-// ========== VERIFICAR STATUS DE CLAIM ==========
+// ========== VERIFICAR STATUS DE CLAIM (via Edge Function) ==========
 void checkClaimStatus() {
-  if (!wifiConnected || deviceUUID.isEmpty()) return;
+  if (!wifiConnected || DEVICE_ID.isEmpty()) return;
   
   HTTPClient http;
-  String url = String(SUPABASE_URL) + "/rest/v1/devices?id=eq." + deviceUUID + "&select=device_token,is_claimed,user_id";
+  String url = String(SUPABASE_URL) + "/functions/v1/device-heartbeat?action=check-claim&device_id=" + DEVICE_ID;
   
   http.begin(url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
   
   int httpCode = http.GET();
   if (httpCode == 200) {
     String response = http.getString();
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<512> doc;
     deserializeJson(doc, response);
     
-    if (doc.is<JsonArray>() && doc.as<JsonArray>().size() > 0) {
-      JsonObject device = doc[0];
+    if (doc["claimed"] == true && !doc["token"].isNull()) {
+      isClaimed = true;
+      DEVICE_TOKEN = doc["token"].as<String>();
       
-      if (!device["user_id"].isNull() && device["is_claimed"] == true) {
-        isClaimed = true;
-        DEVICE_TOKEN = device["device_token"].as<String>();
-        Serial.println("✓ Dispositivo vinculado ao usuário!");
-        Serial.println("Token obtido e salvo.");
-        sendLog("info", "Dispositivo vinculado com sucesso");
-      } else {
-        Serial.println("Aguardando vinculação do usuário...");
-        Serial.println("Exiba o código (MAC): " + DEVICE_ID);
-      }
+      // Salvar token na EEPROM/Preferences
+      preferences.begin("device", false);
+      preferences.putString("token", DEVICE_TOKEN);
+      preferences.end();
+      
+      Serial.println("✓ Dispositivo vinculado! Token salvo.");
+      sendLog("info", "Dispositivo vinculado com sucesso");
     }
   }
   
@@ -350,63 +334,46 @@ void heartbeatTask(void* parameter) {
   }
 }
 
-// ========== ATUALIZAR STATUS ==========
+// ========== ATUALIZAR STATUS (via Edge Function) ==========
 void updateDeviceStatus() {
-  if (!wifiConnected || deviceUUID.isEmpty()) return;
+  if (!wifiConnected || DEVICE_TOKEN.isEmpty()) return;
   
   HTTPClient http;
+  String url = String(SUPABASE_URL) + "/functions/v1/device-heartbeat?action=status";
   
-  // 1. Atualizar last_seen no devices
-  String deviceUrl = String(SUPABASE_URL) + "/rest/v1/devices?id=eq." + deviceUUID;
-  http.begin(deviceUrl);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
   
-  StaticJsonDocument<256> deviceDoc;
-  deviceDoc["is_online"] = true;
+  StaticJsonDocument<512> doc;
+  doc["display_active"] = DISPLAY_ENABLED;
+  doc["wifi_connected"] = wifiConnected;
+  doc["usb_host_active"] = usbHostActive;
+  doc["transfer_active"] = transferActive;
+  doc["storage_used_mb"] = storageUsedMB;
+  doc["total_backups"] = totalBackups;
   
-  String deviceJson;
-  serializeJson(deviceDoc, deviceJson);
-  http.PATCH(deviceJson);
-  http.end();
+  String jsonBody;
+  serializeJson(doc, jsonBody);
   
-  // 2. Inserir status atual
-  String statusUrl = String(SUPABASE_URL) + "/rest/v1/device_status";
-  http.begin(statusUrl);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
-  http.addHeader("Content-Type", "application/json");
-  
-  StaticJsonDocument<512> statusDoc;
-  statusDoc["device_id"] = deviceUUID;
-  statusDoc["display_active"] = DISPLAY_ENABLED;
-  statusDoc["wifi_connected"] = wifiConnected;
-  statusDoc["usb_host_active"] = usbHostActive;
-  statusDoc["transfer_active"] = transferActive;
-  statusDoc["storage_used_mb"] = storageUsedMB;
-  statusDoc["total_backups"] = totalBackups;
-  
-  String statusJson;
-  serializeJson(statusDoc, statusJson);
-  http.POST(statusJson);
+  http.POST(jsonBody);
   http.end();
 }
 
-// ========== ENVIAR LOG ==========
+// ========== ENVIAR LOG (via Edge Function) ==========
 void sendLog(String level, String message) {
-  if (!wifiConnected || deviceUUID.isEmpty()) return;
+  if (!wifiConnected || DEVICE_TOKEN.isEmpty()) return;
   
   HTTPClient http;
-  String url = String(SUPABASE_URL) + "/rest/v1/device_logs";
+  String url = String(SUPABASE_URL) + "/functions/v1/device-heartbeat?action=log";
   
   http.begin(url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
   
   StaticJsonDocument<512> doc;
-  doc["device_id"] = deviceUUID;
   doc["log_level"] = level;
   doc["message"] = message;
   
@@ -417,20 +384,19 @@ void sendLog(String level, String message) {
   http.end();
 }
 
-// ========== REGISTRAR BACKUP ==========
+// ========== REGISTRAR BACKUP (via Edge Function) ==========
 void registerBackup(String filename, float sizeMB, String destination) {
-  if (!wifiConnected || deviceUUID.isEmpty()) return;
+  if (!wifiConnected || DEVICE_TOKEN.isEmpty()) return;
   
   HTTPClient http;
-  String url = String(SUPABASE_URL) + "/rest/v1/device_backups";
+  String url = String(SUPABASE_URL) + "/functions/v1/device-heartbeat?action=backup";
   
   http.begin(url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
   
   StaticJsonDocument<512> doc;
-  doc["device_id"] = deviceUUID;
   doc["filename"] = filename;
   doc["file_size_mb"] = sizeMB;
   doc["backup_type"] = "auto";

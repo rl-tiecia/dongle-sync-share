@@ -1,1 +1,7 @@
 project_id = "eoqlgszxbiezdfmsakxq"
+
+[functions.device-register]
+verify_jwt = false
+
+[functions.device-heartbeat]
+verify_jwt = false
