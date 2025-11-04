@@ -66,9 +66,17 @@ export function useDevices() {
 
       setDevices(data || []);
       
-      // Auto-select first device if none selected
-      if (!selectedDevice && data && data.length > 0) {
-        setSelectedDevice(data[0]);
+      // Auto-select first device if none selected, or reset if selected device was deleted
+      if (data && data.length > 0) {
+        if (!selectedDevice) {
+          setSelectedDevice(data[0]);
+        } else if (!data.find(d => d.id === selectedDevice.id)) {
+          // Selected device was deleted, select first available
+          setSelectedDevice(data[0]);
+        }
+      } else {
+        // No devices available
+        setSelectedDevice(null);
       }
     } catch (error) {
       console.error("Error fetching devices:", error);

@@ -129,6 +129,7 @@ const Dashboard = () => {
         devices={devices}
         selectedDevice={selectedDevice}
         onDeviceSelect={setSelectedDevice}
+        onDeviceUpdated={refetch}
       />
 
       {/* Status Cards */}

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Backups = () => {
-  const { devices, selectedDevice, setSelectedDevice, loading } = useDevices();
+  const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const [backups, setBackups] = useState<any[]>([]);
 
   useEffect(() => {
@@ -90,6 +90,7 @@ const Backups = () => {
         devices={devices}
         selectedDevice={selectedDevice}
         onDeviceSelect={setSelectedDevice}
+        onDeviceUpdated={refetch}
       />
 
       <Card>
