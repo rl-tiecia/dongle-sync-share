@@ -176,7 +176,7 @@ export type Database = {
           last_seen_at: string | null
           mac_address: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           claim_code?: string | null
@@ -192,7 +192,7 @@ export type Database = {
           last_seen_at?: string | null
           mac_address?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           claim_code?: string | null
@@ -208,7 +208,7 @@ export type Database = {
           last_seen_at?: string | null
           mac_address?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -217,10 +217,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_expired_claims: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_expired_claims: { Args: never; Returns: undefined }
     }
     Enums: {
       claim_status: "pending" | "used" | "expired"
