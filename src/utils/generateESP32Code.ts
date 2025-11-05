@@ -16,6 +16,7 @@ export function generateESP32Code(config: ESP32Config): string {
   return `/*
  * ============================================
  * T-Dongle S3 - Firmware de Backup Automático
+ * Backup via Google Drive Apps Script
  * ============================================
  * 
  * CONFIGURAÇÃO NO ARDUINO IDE:
@@ -39,6 +40,37 @@ export function generateESP32Code(config: ESP32Config): string {
  * BIBLIOTECAS NECESSÁRIAS:
  * - TFT_eSPI (by Bodmer) - versão 2.5.0 ou superior
  * - ArduinoJson - versão 6.21.0 ou superior
+ * - base64 (by Densaugeo) - para codificação Base64
+ * 
+ * CONFIGURAÇÃO DO GOOGLE APPS SCRIPT:
+ * 
+ * 1. Acesse: https://script.google.com/
+ * 2. Crie um novo projeto
+ * 3. Cole o seguinte código:
+ * 
+ * function doPost(e) {
+ *   var data = JSON.parse(e.postData.contents);
+ *   var folderId = data.folderId;
+ *   var filename = data.filename;
+ *   var fileData = data.fileData;
+ *   var mimeType = data.mimeType || 'application/octet-stream';
+ *   
+ *   var folder = DriveApp.getFolderById(folderId);
+ *   var blob = Utilities.newBlob(Utilities.base64Decode(fileData), mimeType, filename);
+ *   var file = folder.createFile(blob);
+ *   
+ *   return ContentService.createTextOutput(JSON.stringify({
+ *     success: true,
+ *     fileId: file.getId(),
+ *     fileUrl: file.getUrl()
+ *   })).setMimeType(ContentService.MimeType.JSON);
+ * }
+ * 
+ * 4. Deploy > Nova implantação > Tipo: Aplicativo da Web
+ * 5. Execute como: Você
+ * 6. Quem tem acesso: Qualquer pessoa
+ * 7. Copie o URL do Web App
+ * 8. Substitua YOUR_SCRIPT_ID no código abaixo pelo ID do script
  * 
  * PINOS DO T-DONGLE-S3:
  * Os pinos estão configurados abaixo. Se o display não funcionar:
@@ -50,6 +82,7 @@ export function generateESP32Code(config: ESP32Config): string {
  * - Tela preta: Verifique TFT_BL (backlight) e TFT_RGB_ORDER
  * - Não compila: Instale as bibliotecas necessárias
  * - WiFi não conecta: Verifique SSID e senha
+ * - Upload falha: Verifique FOLDER_ID e AUTH_TOKEN
  * 
  * Gerado automaticamente via Dashboard
  * Claim Code: MAC address do dispositivo
@@ -106,6 +139,7 @@ export function generateESP32Code(config: ESP32Config): string {
 #include <ArduinoJson.h>
 #include <TFT_eSPI.h>
 #include <esp_system.h>
+#include <base64.h>
 
 // ========== CONFIGURAÇÕES WiFi ==========
 const char* WIFI_SSID = "${config.wifiSsid}";
@@ -542,7 +576,7 @@ void displayTransferScreen() {
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.print("Destino: ");
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.println(NETWORK_PATH);
+  tft.println("Google Drive");
 }
 
 void displayStatsScreen() {
@@ -581,34 +615,149 @@ void displayStatsScreen() {
   tft.println(DEVICE_ID.substring(0, 8));
 }
 
+// ========== UPLOAD PARA GOOGLE DRIVE ==========
+bool uploadToGoogleDrive(String filename, uint8_t* fileData, size_t fileSize) {
+  if (!wifiConnected) {
+    sendLog("error", "WiFi desconectado, upload cancelado");
+    return false;
+  }
+  
+  HTTPClient http;
+  
+  // URL do Google Apps Script (você precisa criar um script que aceite uploads)
+  // O script deve estar publicado como Web App e aceitar requisições POST
+  String scriptUrl = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
+  
+  http.begin(scriptUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", String("Bearer ") + DRIVE_AUTH_TOKEN);
+  
+  // Converter arquivo para Base64
+  String base64Data = base64::encode(fileData, fileSize);
+  
+  // Criar JSON payload
+  StaticJsonDocument<2048> doc;
+  doc["folderId"] = DRIVE_FOLDER_ID;
+  doc["filename"] = filename;
+  doc["fileData"] = base64Data;
+  doc["mimeType"] = "application/octet-stream";
+  
+  String jsonBody;
+  serializeJson(doc, jsonBody);
+  
+  Serial.println("Enviando para Google Drive: " + filename);
+  Serial.print("Tamanho: ");
+  Serial.print(fileSize);
+  Serial.println(" bytes");
+  
+  transferActive = true;
+  int httpCode = http.POST(jsonBody);
+  transferActive = false;
+  
+  if (httpCode == 200 || httpCode == 201) {
+    String response = http.getString();
+    Serial.println("Upload bem-sucedido!");
+    Serial.println("Resposta: " + response);
+    
+    // Parsear resposta para obter file ID
+    StaticJsonDocument<512> responseDoc;
+    deserializeJson(responseDoc, response);
+    
+    String driveFileId = responseDoc["fileId"].as<String>();
+    String driveUrl = "https://drive.google.com/file/d/" + driveFileId;
+    
+    http.end();
+    
+    // Registrar backup no Supabase
+    registerBackup(filename, fileSize / (1024.0 * 1024.0), driveUrl);
+    sendLog("info", "Upload Drive concluído: " + filename);
+    
+    return true;
+  } else {
+    Serial.print("Erro no upload: ");
+    Serial.println(httpCode);
+    String error = http.getString();
+    Serial.println("Resposta erro: " + error);
+    http.end();
+    
+    sendLog("error", "Upload Drive falhou (HTTP " + String(httpCode) + "): " + filename);
+    return false;
+  }
+}
+
 // ========== LOOP PRINCIPAL ==========
 void loop() {
-  // Aqui você adiciona sua lógica de:
-  // - Detecção USB
-  // - Leitura de arquivos
-  // - Transferência para rede
-  // - Gerenciamento de backups
+  /* 
+   * INSTRUÇÕES PARA IMPLEMENTAR DETECÇÃO DE ARQUIVOS:
+   * 
+   * Este é um exemplo simplificado. Você precisa adicionar:
+   * 
+   * 1. Detecção de USB/SD Card:
+   *    - Usar biblioteca USB Host ou SD.h
+   *    - Verificar se dispositivo está conectado
+   * 
+   * 2. Listagem de arquivos:
+   *    - Ler arquivos do dispositivo USB/SD
+   *    - Filtrar por tipo (*.bkp, *.zip, etc)
+   * 
+   * 3. Leitura de arquivo:
+   *    - Abrir arquivo
+   *    - Ler conteúdo em buffer
+   *    - Obter tamanho
+   * 
+   * 4. Upload:
+   *    - Chamar uploadToGoogleDrive()
+   *    - Verificar sucesso
+   *    - Deletar se DELETE_AFTER_TRANSFER = true
+   * 
+   * EXEMPLO DE IMPLEMENTAÇÃO COM SD CARD:
+   */
   
-  // Exemplo simplificado:
-  // if (detectarNovoArquivo()) {
-  //   transferActive = true;
-  //   String filename = obterNomeArquivo();
-  //   float size = obterTamanhoArquivo();
-  //   
-  //   if (transferirArquivo(filename)) {
-  //     registerBackup(filename, size, NETWORK_PATH);
-  //     sendLog("info", "Backup de " + filename + " concluído");
-  //     
-  //     if (DELETE_AFTER_TRANSFER) {
-  //       deletarArquivo(filename);
-  //     }
-  //   } else {
-  //     sendLog("error", "Falha no backup de " + filename);
-  //   }
-  //   
-  //   transferActive = false;
-  // }
+  // Exemplo (você precisa adaptar para seu hardware):
+  /*
+  #include <SD.h>
+  #define SD_CS_PIN 10
   
+  if (!SD.begin(SD_CS_PIN)) {
+    sendLog("error", "SD Card não detectado");
+    usbHostActive = false;
+  } else {
+    usbHostActive = true;
+    
+    File root = SD.open("/");
+    File file = root.openNextFile();
+    
+    while (file) {
+      if (!file.isDirectory()) {
+        String filename = file.name();
+        size_t fileSize = file.size();
+        
+        // Ler arquivo em buffer
+        uint8_t* buffer = (uint8_t*)malloc(fileSize);
+        file.read(buffer, fileSize);
+        file.close();
+        
+        // Upload para Google Drive
+        transferActive = true;
+        bool success = uploadToGoogleDrive(filename, buffer, fileSize);
+        transferActive = false;
+        
+        if (success && DELETE_AFTER_TRANSFER) {
+          SD.remove("/" + filename);
+          sendLog("info", "Arquivo deletado após upload: " + filename);
+        } else if (!success) {
+          sendLog("error", "Upload Drive falhou, arquivo mantido no SD: " + filename);
+        }
+        
+        free(buffer);
+      }
+      file = root.openNextFile();
+    }
+    root.close();
+  }
+  */
+  
+  // Aguardar próximo ciclo
   delay(CHECK_INTERVAL * 1000);
 }
 `;
