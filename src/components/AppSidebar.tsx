@@ -40,8 +40,8 @@ export function AppSidebar() {
                       end
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-2 w-full",
-                          isActive && "bg-sidebar-accent"
+                          "flex items-center gap-2 w-full relative transition-colors",
+                          isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-sidebar-primary before:rounded-r"
                         )
                       }
                     >

@@ -1,9 +1,8 @@
 interface ESP32Config {
   wifiSsid: string;
   wifiPassword: string;
-  networkPath: string;
-  username: string;
-  password: string;
+  folderId: string;
+  authToken: string;
   checkInterval: number;
   deleteAfter: boolean;
   displayEnabled: boolean;
@@ -112,10 +111,9 @@ export function generateESP32Code(config: ESP32Config): string {
 const char* WIFI_SSID = "${config.wifiSsid}";
 const char* WIFI_PASSWORD = "${config.wifiPassword}";
 
-// ========== CONFIGURAÇÕES DE REDE ==========
-const char* NETWORK_PATH = "${config.networkPath}";
-const char* NETWORK_USER = "${config.username}";
-const char* NETWORK_PASSWORD = "${config.password}";
+// ========== CONFIGURAÇÕES DO GOOGLE DRIVE ==========
+const char* DRIVE_FOLDER_ID = "${config.folderId}";
+const char* DRIVE_AUTH_TOKEN = "${config.authToken}";
 
 // ========== CONFIGURAÇÕES DO DISPOSITIVO ==========
 const int CHECK_INTERVAL = ${config.checkInterval}; // segundos

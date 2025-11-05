@@ -21,15 +21,11 @@ const settingsSchema = z.object({
   wifiPassword: z.string()
     .min(8, "Senha deve ter no mínimo 8 caracteres")
     .max(63, "Senha deve ter no máximo 63 caracteres"),
-  networkPath: z.string()
-    .min(1, "Caminho de rede não pode estar vazio")
-    .regex(/^\\\\[\w.-]+\\[\w\\.-]+/, "Formato de caminho UNC inválido (deve ser \\\\servidor\\pasta)"),
-  username: z.string()
-    .min(1, "Usuário não pode estar vazio")
-    .max(100, "Usuário deve ter no máximo 100 caracteres"),
-  password: z.string()
-    .min(1, "Senha não pode estar vazia")
-    .max(100, "Senha deve ter no máximo 100 caracteres"),
+  folderId: z.string()
+    .min(1, "ID da pasta do Google Drive não pode estar vazio")
+    .regex(/^[a-zA-Z0-9_-]+$/, "ID da pasta contém caracteres inválidos"),
+  authToken: z.string()
+    .min(1, "Token de autenticação não pode estar vazio"),
   checkInterval: z.coerce.number()
     .int("Intervalo deve ser um número inteiro")
     .min(1, "Intervalo deve ser pelo menos 1 segundo")
@@ -47,9 +43,8 @@ const Settings = () => {
     defaultValues: {
       wifiSsid: "REDE_HOSPITAL",
       wifiPassword: "",
-      networkPath: "\\\\servidor\\backups\\maquina01",
-      username: "admin",
-      password: "",
+      folderId: "",
+      authToken: "",
       checkInterval: 5,
       autoTransfer: true,
       deleteAfter: false,
@@ -82,9 +77,8 @@ const Settings = () => {
       const code = generateESP32Code({
         wifiSsid: formValues.wifiSsid,
         wifiPassword: formValues.wifiPassword,
-        networkPath: formValues.networkPath,
-        username: formValues.username,
-        password: formValues.password,
+        folderId: formValues.folderId,
+        authToken: formValues.authToken,
         checkInterval: formValues.checkInterval,
         deleteAfter: formValues.deleteAfter,
         displayEnabled: formValues.displayEnabled,
@@ -124,9 +118,9 @@ const Settings = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Configurações de Rede</CardTitle>
+            <CardTitle>Configurações de WiFi e Google Drive</CardTitle>
             <CardDescription>
-              Configure a conexão WiFi e o destino dos backups
+              Configure a conexão WiFi e as credenciais do Google Drive para backup
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -162,15 +156,15 @@ const Settings = () => {
 
             <FormField
               control={form.control}
-              name="networkPath"
+              name="folderId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Pasta de Destino na Rede</FormLabel>
+                  <FormLabel>ID da Pasta do Google Drive</FormLabel>
                   <FormControl>
-                    <Input placeholder="\\servidor\backups\maquina01" {...field} />
+                    <Input placeholder="1a2B3c4D5e6F7g8H9i0J" {...field} />
                   </FormControl>
                   <FormDescription>
-                    Caminho UNC para a pasta compartilhada onde os backups serão salvos
+                    ID da pasta onde os backups serão salvos. Encontre o ID na URL da pasta: drive.google.com/drive/folders/[FOLDER_ID]
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -179,27 +173,16 @@ const Settings = () => {
 
             <FormField
               control={form.control}
-              name="username"
+              name="authToken"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Usuário da Rede</FormLabel>
-                  <FormControl>
-                    <Input placeholder="usuario" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Senha da Rede</FormLabel>
+                  <FormLabel>Token de Autenticação do Apps Script</FormLabel>
                   <FormControl>
                     <Input type="password" placeholder="••••••••" {...field} />
                   </FormControl>
+                  <FormDescription>
+                    Token gerado pelo Google Apps Script para autenticação das requisições
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
