@@ -6,11 +6,13 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { UserMenu } from "@/components/UserMenu";
 import Dashboard from "./pages/Dashboard";
 import Backups from "./pages/Backups";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
+import Users from "./pages/Users";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +46,7 @@ const App = () => (
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/backups" element={<Backups />} />
                           <Route path="/logs" element={<Logs />} />
+                          <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
                           <Route path="/settings" element={<Settings />} />
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />

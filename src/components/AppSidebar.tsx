@@ -1,4 +1,5 @@
-import { Home, HardDrive, Settings, FileText } from "lucide-react";
+import { Home, HardDrive, Settings, FileText, Users } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -16,12 +17,14 @@ const items = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Backups", url: "/backups", icon: HardDrive },
   { title: "Logs", url: "/logs", icon: FileText },
+  { title: "Usuários", url: "/users", icon: Users, adminOnly: true },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const { open } = useSidebar();
   const location = useLocation();
+  const { isAdmin } = useUserRole();
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -40,6 +43,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
+                if (item.adminOnly && !isAdmin) return null;
                 const active = isActive(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>

@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.device-heartbeat]
 verify_jwt = false
+
+[functions.device-claim]
+verify_jwt = false
