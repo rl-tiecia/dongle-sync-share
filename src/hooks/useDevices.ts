@@ -11,6 +11,8 @@ export interface Device {
   is_online: boolean;
   created_at: string;
   updated_at: string;
+  user_id?: string;
+  access_type?: 'owner' | 'shared' | 'admin';
 }
 
 export interface DeviceStatus {
@@ -57,6 +59,9 @@ export function useDevices() {
 
   const fetchDevices = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from("devices")
         .select("*")
@@ -64,15 +69,31 @@ export function useDevices() {
 
       if (error) throw error;
 
-      setDevices(data || []);
+      // Determine access type for each device
+      const devicesWithAccess = data?.map(device => {
+        let access_type: 'owner' | 'shared' | 'admin' = 'owner';
+        
+        if (device.user_id !== user.id) {
+          // Check if user is admin or has shared access
+          // This will be refined when we fetch permissions, for now just mark as shared
+          access_type = 'shared';
+        }
+        
+        return {
+          ...device,
+          access_type
+        };
+      }) || [];
+
+      setDevices(devicesWithAccess);
       
       // Auto-select first device if none selected, or reset if selected device was deleted
-      if (data && data.length > 0) {
+      if (devicesWithAccess && devicesWithAccess.length > 0) {
         if (!selectedDevice) {
-          setSelectedDevice(data[0]);
-        } else if (!data.find(d => d.id === selectedDevice.id)) {
+          setSelectedDevice(devicesWithAccess[0]);
+        } else if (!devicesWithAccess.find(d => d.id === selectedDevice.id)) {
           // Selected device was deleted, select first available
-          setSelectedDevice(data[0]);
+          setSelectedDevice(devicesWithAccess[0]);
         }
       } else {
         // No devices available

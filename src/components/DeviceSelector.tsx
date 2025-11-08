@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, Smartphone, Shield, Users } from "lucide-react";
 import { DeviceActionsMenu } from "./DeviceActionsMenu";
 
 interface DeviceSelectorProps {
@@ -27,6 +27,32 @@ export function DeviceSelector({
     // Refresh will be triggered by realtime subscription in useDevices
     onDeviceUpdated();
   };
+
+  const getAccessBadge = (device: Device) => {
+    if (device.access_type === 'owner') {
+      return (
+        <Badge variant="default" className="text-xs">
+          <Smartphone className="w-3 h-3 mr-1" />
+          Meu
+        </Badge>
+      );
+    }
+    if (device.access_type === 'admin') {
+      return (
+        <Badge variant="secondary" className="text-xs">
+          <Shield className="w-3 h-3 mr-1" />
+          Admin
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="text-xs">
+        <Users className="w-3 h-3 mr-1" />
+        Compartilhado
+      </Badge>
+    );
+  };
+
   return (
     <div className="flex items-center gap-4 p-4 border rounded-lg bg-card">
       <div className="flex-1">
@@ -75,6 +101,7 @@ export function DeviceSelector({
               >
                 {selectedDevice.is_online ? "Online" : "Offline"}
               </Badge>
+              {getAccessBadge(selectedDevice)}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">ID:</span>

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreVertical, Pencil, Trash2, Share2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Device } from "@/hooks/useDevices";
+import { useUserRole } from "@/hooks/useUserRole";
+import { DeviceShareDialog } from "./DeviceShareDialog";
 
 interface DeviceActionsMenuProps {
   device: Device;
@@ -40,8 +42,21 @@ interface DeviceActionsMenuProps {
 export function DeviceActionsMenu({ device, onDeviceUpdated, onDeviceDeleted }: DeviceActionsMenuProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [newName, setNewName] = useState(device.device_name);
   const [loading, setLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { isAdmin } = useUserRole();
+
+  // Get current user ID
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id || null);
+    });
+  }, []);
+
+  const isOwner = device.user_id === currentUserId;
+  const canManageDevice = isOwner || isAdmin;
 
   const handleRename = async () => {
     if (!newName.trim()) {
@@ -99,20 +114,34 @@ export function DeviceActionsMenu({ device, onDeviceUpdated, onDeviceDeleted }: 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => {
-            setNewName(device.device_name);
-            setShowEditDialog(true);
-          }}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Renomear
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => setShowDeleteDialog(true)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remover
-          </DropdownMenuItem>
+          {canManageDevice && (
+            <>
+              <DropdownMenuItem onClick={() => {
+                setNewName(device.device_name);
+                setShowEditDialog(true);
+              }}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Renomear
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowShareDialog(true)}>
+                <Share2 className="mr-2 h-4 w-4" />
+                Compartilhar
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setShowDeleteDialog(true)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Remover
+              </DropdownMenuItem>
+            </>
+          )}
+          {!canManageDevice && (
+            <DropdownMenuItem disabled>
+              <Share2 className="mr-2 h-4 w-4" />
+              Somente visualização
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -175,6 +204,12 @@ export function DeviceActionsMenu({ device, onDeviceUpdated, onDeviceDeleted }: 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeviceShareDialog
+        device={device}
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+      />
     </>
   );
 }

@@ -117,6 +117,55 @@ export type Database = {
           },
         ]
       }
+      device_permissions: {
+        Row: {
+          device_id: string
+          granted_at: string | null
+          granted_by: string
+          id: string
+          permission_level: string
+          user_id: string
+        }
+        Insert: {
+          device_id: string
+          granted_at?: string | null
+          granted_by: string
+          id?: string
+          permission_level?: string
+          user_id: string
+        }
+        Update: {
+          device_id?: string
+          granted_at?: string | null
+          granted_by?: string
+          id?: string
+          permission_level?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_permissions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_status: {
         Row: {
           created_at: string
@@ -266,6 +315,10 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_claims: { Args: never; Returns: undefined }
+      has_device_access: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
