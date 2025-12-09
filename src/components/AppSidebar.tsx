@@ -1,4 +1,4 @@
-import { Home, HardDrive, Settings, FileText, Users } from "lucide-react";
+import { Home, HardDrive, Settings, FileText, Users, MonitorCog } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ const items = [
   { title: "Backups", url: "/backups", icon: HardDrive },
   { title: "Logs", url: "/logs", icon: FileText },
   { title: "Usuários", url: "/users", icon: Users, adminOnly: true },
+  { title: "Dispositivos", url: "/admin/devices", icon: MonitorCog, adminOnly: true },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
