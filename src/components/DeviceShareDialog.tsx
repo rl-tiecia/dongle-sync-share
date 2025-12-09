@@ -25,13 +25,18 @@ import { Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 interface DeviceShareDialogProps {
-  device: Device;
+  device?: Device;
+  deviceId?: string;
+  deviceName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function DeviceShareDialog({ device, open, onOpenChange }: DeviceShareDialogProps) {
-  const { permissions, loading, addPermission, removePermission } = useDevicePermissions(device.id);
+export function DeviceShareDialog({ device, deviceId, deviceName, open, onOpenChange }: DeviceShareDialogProps) {
+  const resolvedDeviceId = device?.id || deviceId;
+  const resolvedDeviceName = device?.device_name || deviceName || "Dispositivo";
+  
+  const { permissions, loading, addPermission, removePermission } = useDevicePermissions(resolvedDeviceId);
   const { isAdmin } = useUserRole();
   const [newUserEmail, setNewUserEmail] = useState("");
   const [permissionLevel, setPermissionLevel] = useState<'viewer' | 'editor'>('viewer');
@@ -45,7 +50,7 @@ export function DeviceShareDialog({ device, open, onOpenChange }: DeviceShareDia
     });
   });
 
-  const isOwner = device.user_id === currentUserId;
+  const isOwner = device?.user_id === currentUserId;
   const canManagePermissions = isOwner || isAdmin;
 
   const handleAddPermission = async () => {
@@ -82,7 +87,7 @@ export function DeviceShareDialog({ device, open, onOpenChange }: DeviceShareDia
         <DialogHeader>
           <DialogTitle>Compartilhar Dispositivo</DialogTitle>
           <DialogDescription>
-            Gerencie quem tem acesso ao dispositivo "{device.device_name}"
+            Gerencie quem tem acesso ao dispositivo "{resolvedDeviceName}"
           </DialogDescription>
         </DialogHeader>
 
