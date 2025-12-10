@@ -10,7 +10,7 @@ interface ESP32Config {
 }
 
 const SUPABASE_URL = "https://eoqlgszxbiezdfmsakxq.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvcWxnc3p4YmllemRmbXNha3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjA0NTEsImV4cCI6MjA3NjIzNjQ1MX0.cV8Ks6pNJVeLx-4NkSbNyaEwuz_fPjM5SxUn7wHWsFA";
+// Note: No API key needed - device uses secure token-based authentication after claiming
 
 export function generateESP32Code(config: ESP32Config): string {
   return `/*
