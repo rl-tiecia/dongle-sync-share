@@ -14,6 +14,7 @@ import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
 import AdminDevices from "./pages/AdminDevices";
+import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -50,6 +51,7 @@ const App = () => (
                           <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
                           <Route path="/admin/devices" element={<AdminRoute><AdminDevices /></AdminRoute>} />
                           <Route path="/settings" element={<Settings />} />
+                          <Route path="/profile" element={<Profile />} />
                           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                           <Route path="*" element={<NotFound />} />
                         </Routes>
