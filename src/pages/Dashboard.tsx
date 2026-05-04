@@ -189,6 +189,32 @@ const Dashboard = () => {
         />
       </div>
 
+      {activeBackup && (
+        <Card className="border-info/30 bg-info/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Upload className="h-4 w-4 text-info animate-pulse" />
+                <CardTitle className="text-base">Backup em andamento</CardTitle>
+              </div>
+              <Badge variant="outline" className="bg-info/10 text-info border-info/20">
+                Em tempo real
+              </Badge>
+            </div>
+            <CardDescription className="font-mono text-xs">
+              {activeBackup.filename}
+              {activeBackup.file_size_mb ? ` • ${activeBackup.file_size_mb} MB` : ""}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Progress value={66} className="h-2 animate-pulse" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Iniciado em {new Date(activeBackup.created_at).toLocaleTimeString("pt-BR")}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Device Status */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
