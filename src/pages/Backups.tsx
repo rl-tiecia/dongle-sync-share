@@ -31,7 +31,7 @@ const Backups = () => {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "device_backups",
           filter: `device_id=eq.${selectedDevice.id}`,
