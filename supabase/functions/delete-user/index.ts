@@ -67,8 +67,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in delete-user:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'Erro ao deletar usuário' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
