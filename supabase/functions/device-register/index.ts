@@ -9,7 +9,6 @@ Deno.serve(async (req) => {
   try {
     const { mac_address, firmware_version } = await req.json()
 
-    // Validação básica
     if (!mac_address || !/^[A-F0-9]{12}$/i.test(mac_address)) {
       return new Response(
         JSON.stringify({ error: 'MAC address inválido' }),
@@ -22,17 +21,17 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Verificar se já existe (idempotência)
+    const mac = mac_address.toUpperCase()
+
     const { data: existing } = await supabase
       .from('devices')
       .select('id, is_claimed')
-      .eq('device_id', mac_address)
-      .single()
+      .eq('device_id', mac)
+      .maybeSingle()
 
     if (existing) {
-      console.log(`Device already registered: ${mac_address}`)
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           device_uuid: existing.id,
           already_registered: true,
           is_claimed: existing.is_claimed
@@ -41,37 +40,32 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Registrar novo dispositivo
     const { data, error } = await supabase
       .from('devices')
       .insert({
-        device_id: mac_address,
-        mac_address: mac_address,
-        device_name: `T-Dongle-${mac_address.substring(0, 6)}`,
+        device_id: mac,
+        mac_address: mac,
+        device_name: `T-Dongle-${mac.substring(0, 6)}`,
         firmware_version: firmware_version || '1.0.0',
-        claim_code: mac_address,
         is_claimed: false,
         is_online: true,
-        user_id: '00000000-0000-0000-0000-000000000000' // UUID temporário
+        user_id: null,
       })
       .select('id')
       .single()
 
-    if (error) {
-      console.error('Error registering device:', error)
-      throw error
-    }
+    if (error) throw error
 
-    console.log(`✓ Device registered: ${mac_address} -> ${data.id}`)
+    // Store claim_code in secure secrets table
+    await supabase.from('device_secrets').insert({
+      device_id: data.id,
+      claim_code: mac,
+    })
 
     return new Response(
-      JSON.stringify({ 
-        device_uuid: data.id,
-        message: 'Dispositivo registrado com sucesso'
-      }),
+      JSON.stringify({ device_uuid: data.id, message: 'Dispositivo registrado com sucesso' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
   } catch (error) {
     console.error('Error in device-register:', error)
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
