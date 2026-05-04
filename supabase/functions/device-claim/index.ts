@@ -7,13 +7,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Obter JWT do usuário
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Não autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const supabase = createClient(
@@ -22,93 +19,77 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // Verificar autenticação
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      console.error('Auth error:', authError)
-      return new Response(
-        JSON.stringify({ error: 'Não autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const { claim_code } = await req.json()
-
-    // Validar claim_code
     if (!claim_code || !/^[A-F0-9]{12}$/i.test(claim_code)) {
-      return new Response(
-        JSON.stringify({ error: 'Código de vinculação inválido' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify({ error: 'Código de vinculação inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Usar service role para operações no banco
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Buscar dispositivo
-    const { data: device, error: deviceError } = await supabaseAdmin
+    const code = claim_code.toUpperCase()
+
+    // Look up the device via device_secrets.claim_code
+    const { data: secret, error: secretErr } = await supabaseAdmin
+      .from('device_secrets')
+      .select('device_id')
+      .eq('claim_code', code)
+      .maybeSingle()
+
+    if (secretErr || !secret) {
+      return new Response(JSON.stringify({ error: 'Código inválido ou já utilizado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { data: device } = await supabaseAdmin
       .from('devices')
       .select('id, is_claimed, user_id')
-      .eq('claim_code', claim_code.toUpperCase())
+      .eq('id', secret.device_id)
       .single()
 
-    if (deviceError || !device) {
-      console.error('Device not found:', claim_code, deviceError)
-      return new Response(
-        JSON.stringify({ error: 'Código inválido ou já utilizado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    if (device?.is_claimed && device.user_id && device.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: 'Dispositivo já vinculado a outro usuário' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Verificar se já está claimed por outro usuário
-    if (device.is_claimed && device.user_id !== user.id && device.user_id !== '00000000-0000-0000-0000-000000000000') {
-      return new Response(
-        JSON.stringify({ error: 'Dispositivo já vinculado a outro usuário' }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Gerar token seguro (32 bytes = 256 bits)
+    // Generate device token
     const tokenBytes = new Uint8Array(32)
     crypto.getRandomValues(tokenBytes)
     const deviceToken = btoa(String.fromCharCode(...tokenBytes))
 
-    // Vincular dispositivo ao usuário
-    const { error: updateError } = await supabaseAdmin
+    const { error: updErr } = await supabaseAdmin
       .from('devices')
       .update({
         user_id: user.id,
         is_claimed: true,
         claimed_at: new Date().toISOString(),
-        device_token: deviceToken
       })
-      .eq('id', device.id)
+      .eq('id', secret.device_id)
+    if (updErr) throw updErr
 
-    if (updateError) {
-      console.error('Update error:', updateError)
-      throw updateError
-    }
-
-    console.log(`✓ Device claimed: ${claim_code} by user ${user.id}`)
+    // Reset retrieval state — device must pick up token once via check-claim
+    await supabaseAdmin
+      .from('device_secrets')
+      .update({ device_token: deviceToken, token_retrieved_at: null })
+      .eq('device_id', secret.device_id)
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        device_id: device.id,
-        message: 'Dispositivo vinculado com sucesso'
-      }),
+      JSON.stringify({ success: true, device_id: secret.device_id, message: 'Dispositivo vinculado com sucesso' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
   } catch (error) {
     console.error('Error in device-claim:', error)
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
