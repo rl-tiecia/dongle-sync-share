@@ -14,16 +14,284 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      device_backups: {
+        Row: {
+          backup_type: string | null
+          created_at: string
+          destination: string | null
+          device_id: string
+          file_size_mb: number | null
+          filename: string
+          id: string
+          status: string
+        }
+        Insert: {
+          backup_type?: string | null
+          created_at?: string
+          destination?: string | null
+          device_id: string
+          file_size_mb?: number | null
+          filename: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          backup_type?: string | null
+          created_at?: string
+          destination?: string | null
+          device_id?: string
+          file_size_mb?: number | null
+          filename?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_backups_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_logs: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          log_level: string
+          message: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          log_level?: string
+          message: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          log_level?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_logs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_permissions: {
+        Row: {
+          device_id: string
+          granted_at: string
+          granted_by: string
+          id: string
+          permission_level: string
+          user_id: string
+        }
+        Insert: {
+          device_id: string
+          granted_at?: string
+          granted_by: string
+          id?: string
+          permission_level?: string
+          user_id: string
+        }
+        Update: {
+          device_id?: string
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          permission_level?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_permissions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_status: {
+        Row: {
+          created_at: string
+          device_id: string
+          display_active: boolean
+          id: string
+          storage_used_mb: number
+          total_backups: number
+          transfer_active: boolean
+          usb_host_active: boolean
+          wifi_connected: boolean
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          display_active?: boolean
+          id?: string
+          storage_used_mb?: number
+          total_backups?: number
+          transfer_active?: boolean
+          usb_host_active?: boolean
+          wifi_connected?: boolean
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          display_active?: boolean
+          id?: string
+          storage_used_mb?: number
+          total_backups?: number
+          transfer_active?: boolean
+          usb_host_active?: boolean
+          wifi_connected?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_status_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      devices: {
+        Row: {
+          claim_code: string | null
+          claimed_at: string | null
+          created_at: string
+          device_id: string
+          device_name: string
+          device_token: string | null
+          firmware_version: string | null
+          id: string
+          is_claimed: boolean
+          is_online: boolean
+          last_seen_at: string | null
+          mac_address: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          claim_code?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          device_id: string
+          device_name: string
+          device_token?: string | null
+          firmware_version?: string | null
+          id?: string
+          is_claimed?: boolean
+          is_online?: boolean
+          last_seen_at?: string | null
+          mac_address?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          claim_code?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          device_id?: string
+          device_name?: string
+          device_token?: string | null
+          firmware_version?: string | null
+          id?: string
+          is_claimed?: boolean
+          is_online?: boolean
+          last_seen_at?: string | null
+          mac_address?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_device: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_edit_device: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +418,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
