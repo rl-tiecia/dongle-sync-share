@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeSubscription } from "./useRealtimeSubscription";
 
 export interface Device {
   id: string;
@@ -34,28 +35,14 @@ export function useDevices() {
 
   useEffect(() => {
     fetchDevices();
-
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel("devices-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "devices",
-        },
-        (payload) => {
-          console.log("Device change:", payload);
-          fetchDevices();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
+
+  useRealtimeSubscription({
+    channel: "devices-changes",
+    table: "devices",
+    event: "*",
+    onChange: () => fetchDevices(),
+  });
 
   const fetchDevices = async () => {
     try {
@@ -124,31 +111,19 @@ export function useDeviceStatus(deviceId: string | undefined) {
       setLoading(false);
       return;
     }
-
     fetchStatus();
-
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel(`device-status-${deviceId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "device_status",
-          filter: `device_id=eq.${deviceId}`,
-        },
-        (payload) => {
-          console.log("Status change:", payload);
-          setStatus(payload.new as DeviceStatus);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [deviceId]);
+
+  useRealtimeSubscription<DeviceStatus>({
+    channel: `device-status-${deviceId ?? "none"}`,
+    table: "device_status",
+    event: "INSERT",
+    filter: deviceId ? `device_id=eq.${deviceId}` : undefined,
+    enabled: !!deviceId,
+    onChange: (payload) => {
+      if (payload.new) setStatus(payload.new as DeviceStatus);
+    },
+  });
 
   const fetchStatus = async () => {
     if (!deviceId) return;

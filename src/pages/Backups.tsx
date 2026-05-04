@@ -6,44 +6,34 @@ import { DeviceSelector } from "@/components/DeviceSelector";
 import { useDevices } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 
 const Backups = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const [backups, setBackups] = useState<any[]>([]);
 
-  useEffect(() => {
+  const fetchBackups = async () => {
     if (!selectedDevice) return;
+    const { data } = await supabase
+      .from("device_backups")
+      .select("*")
+      .eq("device_id", selectedDevice.id)
+      .order("created_at", { ascending: false });
+    setBackups(data || []);
+  };
 
-    const fetchBackups = async () => {
-      const { data } = await supabase
-        .from("device_backups")
-        .select("*")
-        .eq("device_id", selectedDevice.id)
-        .order("created_at", { ascending: false });
-
-      setBackups(data || []);
-    };
-
+  useEffect(() => {
     fetchBackups();
+  }, [selectedDevice?.id]);
 
-    const channel = supabase
-      .channel(`backups-${selectedDevice.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "device_backups",
-          filter: `device_id=eq.${selectedDevice.id}`,
-        },
-        () => fetchBackups()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedDevice]);
+  useRealtimeSubscription({
+    channel: `backups-${selectedDevice?.id ?? "none"}`,
+    table: "device_backups",
+    event: "*",
+    filter: selectedDevice ? `device_id=eq.${selectedDevice.id}` : undefined,
+    enabled: !!selectedDevice,
+    onChange: () => fetchBackups(),
+  });
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Carregando...</div>;

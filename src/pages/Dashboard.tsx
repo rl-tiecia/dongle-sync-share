@@ -4,8 +4,10 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle, Plus, Link } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Activity, Wifi, HardDrive, Clock, CheckCircle2, XCircle, Plus, Link, Upload } from "lucide-react";
 import { useDevices, useDeviceStatus } from "@/hooks/useDevices";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { simulateDevice } from "@/utils/simulateDevice";
@@ -16,42 +18,64 @@ const Dashboard = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const { status } = useDeviceStatus(selectedDevice?.id);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [activeBackup, setActiveBackup] = useState<any | null>(null);
   const [showAddDevice, setShowAddDevice] = useState(false);
 
-  useEffect(() => {
+  const fetchRecentActivity = async () => {
     if (!selectedDevice) return;
+    const { data } = await supabase
+      .from("device_logs")
+      .select("*")
+      .eq("device_id", selectedDevice.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    setRecentActivity(data || []);
+  };
 
-    const fetchRecentActivity = async () => {
-      const { data } = await supabase
-        .from("device_logs")
-        .select("*")
-        .eq("device_id", selectedDevice.id)
-        .order("created_at", { ascending: false })
-        .limit(4);
+  const fetchActiveBackup = async () => {
+    if (!selectedDevice) return;
+    const { data } = await supabase
+      .from("device_backups")
+      .select("*")
+      .eq("device_id", selectedDevice.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setActiveBackup(data);
+  };
 
-      setRecentActivity(data || []);
-    };
-
+  useEffect(() => {
     fetchRecentActivity();
+    fetchActiveBackup();
+  }, [selectedDevice?.id]);
 
-    const channel = supabase
-      .channel(`logs-${selectedDevice.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "device_logs",
-          filter: `device_id=eq.${selectedDevice.id}`,
-        },
-        () => fetchRecentActivity()
-      )
-      .subscribe();
+  // Live device_logs stream — prepend new log without refetch, with dedup
+  useRealtimeSubscription<any>({
+    channel: `logs-${selectedDevice?.id ?? "none"}`,
+    table: "device_logs",
+    event: "INSERT",
+    filter: selectedDevice ? `device_id=eq.${selectedDevice.id}` : undefined,
+    enabled: !!selectedDevice,
+    onChange: (payload) => {
+      const row = payload.new;
+      if (!row) return;
+      setRecentActivity((prev) => {
+        if (prev.some((p) => p.id === row.id)) return prev;
+        return [row, ...prev].slice(0, 8);
+      });
+    },
+  });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedDevice]);
+  // Live backup progress — react to inserts and updates
+  useRealtimeSubscription<any>({
+    channel: `backups-live-${selectedDevice?.id ?? "none"}`,
+    table: "device_backups",
+    event: "*",
+    filter: selectedDevice ? `device_id=eq.${selectedDevice.id}` : undefined,
+    enabled: !!selectedDevice,
+    onChange: () => fetchActiveBackup(),
+  });
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Carregando...</div>;
@@ -164,6 +188,32 @@ const Dashboard = () => {
           subtitle="Armazenamento total"
         />
       </div>
+
+      {activeBackup && (
+        <Card className="border-info/30 bg-info/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Upload className="h-4 w-4 text-info animate-pulse" />
+                <CardTitle className="text-base">Backup em andamento</CardTitle>
+              </div>
+              <Badge variant="outline" className="bg-info/10 text-info border-info/20">
+                Em tempo real
+              </Badge>
+            </div>
+            <CardDescription className="font-mono text-xs">
+              {activeBackup.filename}
+              {activeBackup.file_size_mb ? ` • ${activeBackup.file_size_mb} MB` : ""}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Progress value={66} className="h-2 animate-pulse" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Iniciado em {new Date(activeBackup.created_at).toLocaleTimeString("pt-BR")}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Device Status */}
       <div className="grid gap-4 md:grid-cols-2">
