@@ -90,8 +90,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in admin-invite-user:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'Erro ao convidar usuário' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

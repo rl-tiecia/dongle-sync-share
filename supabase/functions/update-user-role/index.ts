@@ -41,6 +41,18 @@ serve(async (req) => {
 
     const { target_user_id, new_role } = await req.json();
 
+    const VALID_ROLES = ['admin', 'user'];
+    if (typeof target_user_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(target_user_id)) {
+      return new Response(JSON.stringify({ error: 'target_user_id inválido' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!VALID_ROLES.includes(new_role)) {
+      return new Response(JSON.stringify({ error: 'Role inválida' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log('Admin updating user role:', { target_user_id, new_role });
 
     // Deletar role antiga
@@ -71,8 +83,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in update-user-role:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'Erro ao atualizar role' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
