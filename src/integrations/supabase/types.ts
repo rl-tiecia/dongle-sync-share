@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -23,7 +23,7 @@ export type Database = {
           file_size_mb: number | null
           filename: string
           id: string
-          status: string | null
+          status: string
         }
         Insert: {
           backup_type?: string | null
@@ -33,7 +33,7 @@ export type Database = {
           file_size_mb?: number | null
           filename: string
           id?: string
-          status?: string | null
+          status?: string
         }
         Update: {
           backup_type?: string | null
@@ -43,7 +43,7 @@ export type Database = {
           file_size_mb?: number | null
           filename?: string
           id?: string
-          status?: string | null
+          status?: string
         }
         Relationships: [
           {
@@ -54,36 +54,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      device_claims: {
-        Row: {
-          claim_code: string
-          created_at: string | null
-          expires_at: string
-          id: string
-          is_used: boolean | null
-          used_at: string | null
-          user_id: string
-        }
-        Insert: {
-          claim_code: string
-          created_at?: string | null
-          expires_at: string
-          id?: string
-          is_used?: boolean | null
-          used_at?: string | null
-          user_id: string
-        }
-        Update: {
-          claim_code?: string
-          created_at?: string | null
-          expires_at?: string
-          id?: string
-          is_used?: boolean | null
-          used_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
       }
       device_logs: {
         Row: {
@@ -97,7 +67,7 @@ export type Database = {
           created_at?: string
           device_id: string
           id?: string
-          log_level: string
+          log_level?: string
           message: string
         }
         Update: {
@@ -120,7 +90,7 @@ export type Database = {
       device_permissions: {
         Row: {
           device_id: string
-          granted_at: string | null
+          granted_at: string
           granted_by: string
           id: string
           permission_level: string
@@ -128,7 +98,7 @@ export type Database = {
         }
         Insert: {
           device_id: string
-          granted_at?: string | null
+          granted_at?: string
           granted_by: string
           id?: string
           permission_level?: string
@@ -136,7 +106,7 @@ export type Database = {
         }
         Update: {
           device_id?: string
-          granted_at?: string | null
+          granted_at?: string
           granted_by?: string
           id?: string
           permission_level?: string
@@ -148,13 +118,6 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "devices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "device_permissions_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -170,35 +133,35 @@ export type Database = {
         Row: {
           created_at: string
           device_id: string
-          display_active: boolean | null
+          display_active: boolean
           id: string
-          storage_used_mb: number | null
-          total_backups: number | null
-          transfer_active: boolean | null
-          usb_host_active: boolean | null
-          wifi_connected: boolean | null
+          storage_used_mb: number
+          total_backups: number
+          transfer_active: boolean
+          usb_host_active: boolean
+          wifi_connected: boolean
         }
         Insert: {
           created_at?: string
           device_id: string
-          display_active?: boolean | null
+          display_active?: boolean
           id?: string
-          storage_used_mb?: number | null
-          total_backups?: number | null
-          transfer_active?: boolean | null
-          usb_host_active?: boolean | null
-          wifi_connected?: boolean | null
+          storage_used_mb?: number
+          total_backups?: number
+          transfer_active?: boolean
+          usb_host_active?: boolean
+          wifi_connected?: boolean
         }
         Update: {
           created_at?: string
           device_id?: string
-          display_active?: boolean | null
+          display_active?: boolean
           id?: string
-          storage_used_mb?: number | null
-          total_backups?: number | null
-          transfer_active?: boolean | null
-          usb_host_active?: boolean | null
-          wifi_connected?: boolean | null
+          storage_used_mb?: number
+          total_backups?: number
+          transfer_active?: boolean
+          usb_host_active?: boolean
+          wifi_connected?: boolean
         }
         Relationships: [
           {
@@ -220,8 +183,8 @@ export type Database = {
           device_token: string | null
           firmware_version: string | null
           id: string
-          is_claimed: boolean | null
-          is_online: boolean | null
+          is_claimed: boolean
+          is_online: boolean
           last_seen_at: string | null
           mac_address: string | null
           updated_at: string
@@ -236,8 +199,8 @@ export type Database = {
           device_token?: string | null
           firmware_version?: string | null
           id?: string
-          is_claimed?: boolean | null
-          is_online?: boolean | null
+          is_claimed?: boolean
+          is_online?: boolean
           last_seen_at?: string | null
           mac_address?: string | null
           updated_at?: string
@@ -252,8 +215,8 @@ export type Database = {
           device_token?: string | null
           firmware_version?: string | null
           id?: string
-          is_claimed?: boolean | null
-          is_online?: boolean | null
+          is_claimed?: boolean
+          is_online?: boolean
           last_seen_at?: string | null
           mac_address?: string | null
           updated_at?: string
@@ -287,22 +250,19 @@ export type Database = {
       }
       user_roles: {
         Row: {
-          assigned_at: string
-          assigned_by: string | null
+          created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
-          assigned_at?: string
-          assigned_by?: string | null
+          created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
-          assigned_at?: string
-          assigned_by?: string | null
+          created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
@@ -314,8 +274,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_expired_claims: { Args: never; Returns: undefined }
-      has_device_access: {
+      can_access_device: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_edit_device: {
         Args: { _device_id: string; _user_id: string }
         Returns: boolean
       }
@@ -326,11 +289,9 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"
-      claim_status: "pending" | "used" | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -459,7 +420,6 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
-      claim_status: ["pending", "used", "expired"],
     },
   },
 } as const
