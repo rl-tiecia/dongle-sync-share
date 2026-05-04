@@ -34,42 +34,6 @@ const Backups = () => {
     enabled: !!selectedDevice,
     onChange: () => fetchBackups(),
   });
-  const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
-  const [backups, setBackups] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!selectedDevice) return;
-
-    const fetchBackups = async () => {
-      const { data } = await supabase
-        .from("device_backups")
-        .select("*")
-        .eq("device_id", selectedDevice.id)
-        .order("created_at", { ascending: false });
-
-      setBackups(data || []);
-    };
-
-    fetchBackups();
-
-    const channel = supabase
-      .channel(`backups-${selectedDevice.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "device_backups",
-          filter: `device_id=eq.${selectedDevice.id}`,
-        },
-        () => fetchBackups()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedDevice]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Carregando...</div>;
