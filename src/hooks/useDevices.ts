@@ -35,28 +35,14 @@ export function useDevices() {
 
   useEffect(() => {
     fetchDevices();
-
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel("devices-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "devices",
-        },
-        (payload) => {
-          console.log("Device change:", payload);
-          fetchDevices();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
+
+  useRealtimeSubscription({
+    channel: "devices-changes",
+    table: "devices",
+    event: "*",
+    onChange: () => fetchDevices(),
+  });
 
   const fetchDevices = async () => {
     try {
