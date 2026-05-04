@@ -18,42 +18,64 @@ const Dashboard = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const { status } = useDeviceStatus(selectedDevice?.id);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [activeBackup, setActiveBackup] = useState<any | null>(null);
   const [showAddDevice, setShowAddDevice] = useState(false);
 
-  useEffect(() => {
+  const fetchRecentActivity = async () => {
     if (!selectedDevice) return;
+    const { data } = await supabase
+      .from("device_logs")
+      .select("*")
+      .eq("device_id", selectedDevice.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    setRecentActivity(data || []);
+  };
 
-    const fetchRecentActivity = async () => {
-      const { data } = await supabase
-        .from("device_logs")
-        .select("*")
-        .eq("device_id", selectedDevice.id)
-        .order("created_at", { ascending: false })
-        .limit(4);
+  const fetchActiveBackup = async () => {
+    if (!selectedDevice) return;
+    const { data } = await supabase
+      .from("device_backups")
+      .select("*")
+      .eq("device_id", selectedDevice.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setActiveBackup(data);
+  };
 
-      setRecentActivity(data || []);
-    };
-
+  useEffect(() => {
     fetchRecentActivity();
+    fetchActiveBackup();
+  }, [selectedDevice?.id]);
 
-    const channel = supabase
-      .channel(`logs-${selectedDevice.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "device_logs",
-          filter: `device_id=eq.${selectedDevice.id}`,
-        },
-        () => fetchRecentActivity()
-      )
-      .subscribe();
+  // Live device_logs stream — prepend new log without refetch, with dedup
+  useRealtimeSubscription<any>({
+    channel: `logs-${selectedDevice?.id ?? "none"}`,
+    table: "device_logs",
+    event: "INSERT",
+    filter: selectedDevice ? `device_id=eq.${selectedDevice.id}` : undefined,
+    enabled: !!selectedDevice,
+    onChange: (payload) => {
+      const row = payload.new;
+      if (!row) return;
+      setRecentActivity((prev) => {
+        if (prev.some((p) => p.id === row.id)) return prev;
+        return [row, ...prev].slice(0, 8);
+      });
+    },
+  });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedDevice]);
+  // Live backup progress — react to inserts and updates
+  useRealtimeSubscription<any>({
+    channel: `backups-live-${selectedDevice?.id ?? "none"}`,
+    table: "device_backups",
+    event: "*",
+    filter: selectedDevice ? `device_id=eq.${selectedDevice.id}` : undefined,
+    enabled: !!selectedDevice,
+    onChange: () => fetchActiveBackup(),
+  });
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Carregando...</div>;
