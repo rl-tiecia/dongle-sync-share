@@ -129,6 +129,41 @@ export type Database = {
           },
         ]
       }
+      device_secrets: {
+        Row: {
+          claim_code: string | null
+          created_at: string
+          device_id: string
+          device_token: string | null
+          token_retrieved_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          claim_code?: string | null
+          created_at?: string
+          device_id: string
+          device_token?: string | null
+          token_retrieved_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          claim_code?: string | null
+          created_at?: string
+          device_id?: string
+          device_token?: string | null
+          token_retrieved_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_secrets_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: true
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_status: {
         Row: {
           created_at: string
@@ -175,12 +210,10 @@ export type Database = {
       }
       devices: {
         Row: {
-          claim_code: string | null
           claimed_at: string | null
           created_at: string
           device_id: string
           device_name: string
-          device_token: string | null
           firmware_version: string | null
           id: string
           is_claimed: boolean
@@ -191,12 +224,10 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          claim_code?: string | null
           claimed_at?: string | null
           created_at?: string
           device_id: string
           device_name: string
-          device_token?: string | null
           firmware_version?: string | null
           id?: string
           is_claimed?: boolean
@@ -207,12 +238,10 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          claim_code?: string | null
           claimed_at?: string | null
           created_at?: string
           device_id?: string
           device_name?: string
-          device_token?: string | null
           firmware_version?: string | null
           id?: string
           is_claimed?: boolean
