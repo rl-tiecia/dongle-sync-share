@@ -98,15 +98,17 @@ export function generateESP32Code(config: ESP32Config): string {
 
 #define USER_SETUP_LOADED 1
 
-// Driver do display
+// Driver do display (ST7735 80x160 do T-Dongle-S3)
 #define ST7735_DRIVER
+#define ST7735_GREENTAB160x80   // Variante correta do painel (BGR, invertido, offset 26)
 
-// Pinos SPI do T-Dongle-S3 (ESP32-S3)
-#define TFT_MOSI 3    // Verifique esquemático
-#define TFT_SCLK 2    // Verifique esquemático  
-#define TFT_CS   4    // Chip Select
-#define TFT_DC   5    // Data/Command
-#define TFT_RST  1    // Reset (-1 se conectado ao RST do ESP)
+// Pinos SPI oficiais do T-Dongle-S3 (Setup209_LilyGo_T_Dongle_S3.h)
+#define TFT_MISO -1
+#define TFT_MOSI 3
+#define TFT_SCLK 5
+#define TFT_CS   4
+#define TFT_DC   2
+#define TFT_RST  1
 #define TFT_BL   38   // Backlight
 
 // Configuração do backlight
@@ -116,7 +118,7 @@ export function generateESP32Code(config: ESP32Config): string {
 #define TFT_WIDTH  80
 #define TFT_HEIGHT 160
 
-// Ordem de cores (pode ser TFT_RGB ou TFT_BGR)
+// Ordem de cores do painel
 #define TFT_RGB_ORDER TFT_BGR
 
 // Fontes
@@ -126,12 +128,11 @@ export function generateESP32Code(config: ESP32Config): string {
 #define LOAD_GFXFF
 #define SMOOTH_FONT
 
-// Frequências SPI
+// Frequências SPI (ST7735 suporta com folga até 27 MHz)
 #define SPI_FREQUENCY  27000000
 #define SPI_READ_FREQUENCY  20000000
 
-// CRÍTICO para ESP32-S3: usar porta HSPI
-#define USE_HSPI_PORT
+// No ESP32-S3 o TFT_eSPI usa FSPI por padrão; NÃO definir USE_HSPI_PORT
 
 // ========== BIBLIOTECAS ==========
 #include <WiFi.h>
