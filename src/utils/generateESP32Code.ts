@@ -9,7 +9,7 @@ interface ESP32Config {
   // claimCode removido - dispositivo usa MAC address como identificador único
 }
 
-const SUPABASE_URL = "https://eoqlgszxbiezdfmsakxq.supabase.co";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || "https://cofvhqmkekclgdbxadgn.supabase.co";
 // Note: No API key needed - device uses secure token-based authentication after claiming
 
 export function generateESP32Code(config: ESP32Config): string {
