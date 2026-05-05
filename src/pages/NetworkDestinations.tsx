@@ -59,12 +59,22 @@ export default function NetworkDestinations() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Não autenticado");
+      const d = parsed.data;
       const payload = {
-        ...parsed.data,
-        port: Number.isFinite(parsed.data.port as number) ? parsed.data.port : null,
+        name: d.name,
+        protocol: d.protocol,
+        host: d.host,
+        share: d.share,
+        remote_path: d.remote_path || "/",
+        username: d.username || null,
+        password: d.password || null,
+        domain: d.domain || null,
+        port: Number.isFinite(d.port as number) ? (d.port as number) : null,
+        enabled: d.enabled,
+        is_default: d.is_default,
         user_id: user.id,
       };
-      const { error } = await supabase.from("network_destinations").insert([payload]);
+      const { error } = await supabase.from("network_destinations").insert(payload);
       if (error) throw error;
       toast.success("Destino criado");
       setForm(empty);
