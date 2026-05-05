@@ -141,6 +141,8 @@ export function generateESP32Code(config: ESP32Config): string {
 #include <TFT_eSPI.h>
 #include <esp_system.h>
 #include <base64.h>
+#include <MD5Builder.h>
+#include <SD_MMC.h>
 
 // ========== CONFIGURAÇÕES WiFi ==========
 const char* WIFI_SSID = "${config.wifiSsid}";
@@ -178,6 +180,16 @@ bool usbHostActive = false;
 bool transferActive = false;
 int totalBackups = 0;
 long storageUsedMB = 0;
+
+// Estado do upload em curso (mostrado no display)
+String currentUploadFile = "";
+String uploadState = "READY"; // READY | SENDING | OK | ERR
+String lastError = "";
+
+// Watcher de arquivos do pendrive
+struct FileSnap { String name; size_t size; uint32_t mtime; };
+std::vector<FileSnap> lastSnap;
+unsigned long lastStableTime = 0;
 
 // Controle de telas
 int currentScreen = 0;
