@@ -562,34 +562,45 @@ void displayTransferScreen() {
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(10, 10);
-  tft.println("TRANSFERENCIA");
-  
+  tft.println("BACKUP");
+
   tft.setTextSize(1);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setCursor(10, 50);
-  
-  if (transferActive) {
+  tft.setCursor(10, 45);
+  if (uploadState == "READY") {
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.println("Status: Em andamento");
-    tft.setCursor(10, 70);
+    tft.println("Pronto");
+    tft.setCursor(10, 65);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println("Transferindo arquivo...");
-    // Aqui você pode adicionar progresso
-  } else {
+    tft.println("Aguardando arquivo");
+  } else if (uploadState == "SENDING") {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.println("Status: Aguardando");
-    tft.setCursor(10, 70);
+    tft.println("Enviando...");
+    tft.setCursor(10, 65);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println("Nenhuma transferência");
-    tft.setCursor(10, 85);
-    tft.println("em andamento");
+    tft.println(currentUploadFile.substring(0, 18));
+    if (currentUploadFile.length() > 18) {
+      tft.setCursor(10, 80);
+      tft.println(currentUploadFile.substring(18, 36));
+    }
+  } else if (uploadState == "OK") {
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.println("Sucesso");
+    tft.setCursor(10, 65);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.println(currentUploadFile.substring(0, 18));
+  } else {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.println("ERRO");
+    tft.setCursor(10, 65);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.println(lastError.substring(0, 18));
   }
-  
-  tft.setCursor(10, 110);
+
+  tft.setCursor(10, 115);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.print("Destino: ");
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.println("Google Drive");
+  tft.println("Cloud");
 }
 
 void displayStatsScreen() {
