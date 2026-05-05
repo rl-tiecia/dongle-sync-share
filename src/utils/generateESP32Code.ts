@@ -141,6 +141,8 @@ export function generateESP32Code(config: ESP32Config): string {
 #include <TFT_eSPI.h>
 #include <esp_system.h>
 #include <base64.h>
+#include <MD5Builder.h>
+#include <SD_MMC.h>
 
 // ========== CONFIGURAÇÕES WiFi ==========
 const char* WIFI_SSID = "${config.wifiSsid}";
@@ -178,6 +180,16 @@ bool usbHostActive = false;
 bool transferActive = false;
 int totalBackups = 0;
 long storageUsedMB = 0;
+
+// Estado do upload em curso (mostrado no display)
+String currentUploadFile = "";
+String uploadState = "READY"; // READY | SENDING | OK | ERR
+String lastError = "";
+
+// Watcher de arquivos do pendrive
+struct FileSnap { String name; size_t size; uint32_t mtime; };
+std::vector<FileSnap> lastSnap;
+unsigned long lastStableTime = 0;
 
 // Controle de telas
 int currentScreen = 0;
@@ -550,34 +562,45 @@ void displayTransferScreen() {
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(10, 10);
-  tft.println("TRANSFERENCIA");
-  
+  tft.println("BACKUP");
+
   tft.setTextSize(1);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setCursor(10, 50);
-  
-  if (transferActive) {
+  tft.setCursor(10, 45);
+  if (uploadState == "READY") {
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.println("Status: Em andamento");
-    tft.setCursor(10, 70);
+    tft.println("Pronto");
+    tft.setCursor(10, 65);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println("Transferindo arquivo...");
-    // Aqui você pode adicionar progresso
-  } else {
+    tft.println("Aguardando arquivo");
+  } else if (uploadState == "SENDING") {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.println("Status: Aguardando");
-    tft.setCursor(10, 70);
+    tft.println("Enviando...");
+    tft.setCursor(10, 65);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println("Nenhuma transferência");
-    tft.setCursor(10, 85);
-    tft.println("em andamento");
+    tft.println(currentUploadFile.substring(0, 18));
+    if (currentUploadFile.length() > 18) {
+      tft.setCursor(10, 80);
+      tft.println(currentUploadFile.substring(18, 36));
+    }
+  } else if (uploadState == "OK") {
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.println("Sucesso");
+    tft.setCursor(10, 65);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.println(currentUploadFile.substring(0, 18));
+  } else {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.println("ERRO");
+    tft.setCursor(10, 65);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.println(lastError.substring(0, 18));
   }
-  
-  tft.setCursor(10, 110);
+
+  tft.setCursor(10, 115);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.print("Destino: ");
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.println("Google Drive");
+  tft.println("Cloud");
 }
 
 void displayStatsScreen() {
@@ -616,149 +639,183 @@ void displayStatsScreen() {
   tft.println(DEVICE_ID.substring(0, 8));
 }
 
-// ========== UPLOAD PARA GOOGLE DRIVE ==========
-bool uploadToGoogleDrive(String filename, uint8_t* fileData, size_t fileSize) {
-  if (!wifiConnected) {
-    sendLog("error", "WiFi desconectado, upload cancelado");
-    return false;
-  }
-  
+// ========== UPLOAD PARA LOVABLE CLOUD ==========
+bool callBackupInit(const String& filename, size_t sizeBytes, const String& md5,
+                    String& outBackupId, String& outUploadUrl) {
   HTTPClient http;
-  
-  // URL do Google Apps Script (você precisa criar um script que aceite uploads)
-  // O script deve estar publicado como Web App e aceitar requisições POST
-  String scriptUrl = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
-  
-  http.begin(scriptUrl);
+  String url = String(SUPABASE_URL) + "/functions/v1/device-backup-init";
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", String("Bearer ") + DRIVE_AUTH_TOKEN);
-  
-  // Converter arquivo para Base64
-  String base64Data = base64::encode(fileData, fileSize);
-  
-  // Criar JSON payload
-  StaticJsonDocument<2048> doc;
-  doc["folderId"] = DRIVE_FOLDER_ID;
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
+
+  StaticJsonDocument<512> doc;
   doc["filename"] = filename;
-  doc["fileData"] = base64Data;
-  doc["mimeType"] = "application/octet-stream";
-  
-  String jsonBody;
-  serializeJson(doc, jsonBody);
-  
-  Serial.println("Enviando para Google Drive: " + filename);
-  Serial.print("Tamanho: ");
-  Serial.print(fileSize);
-  Serial.println(" bytes");
-  
-  transferActive = true;
-  int httpCode = http.POST(jsonBody);
-  transferActive = false;
-  
-  if (httpCode == 200 || httpCode == 201) {
-    String response = http.getString();
-    Serial.println("Upload bem-sucedido!");
-    Serial.println("Resposta: " + response);
-    
-    // Parsear resposta para obter file ID
-    StaticJsonDocument<512> responseDoc;
-    deserializeJson(responseDoc, response);
-    
-    String driveFileId = responseDoc["fileId"].as<String>();
-    String driveUrl = "https://drive.google.com/file/d/" + driveFileId;
-    
+  doc["file_size_mb"] = sizeBytes / (1024.0 * 1024.0);
+  doc["md5_hash"] = md5;
+  doc["content_type"] = "application/octet-stream";
+
+  String body; serializeJson(doc, body);
+  int code = http.POST(body);
+  if (code != 200) {
+    Serial.printf("backup-init falhou: %d\\n", code);
     http.end();
-    
-    // Registrar backup no Supabase
-    registerBackup(filename, fileSize / (1024.0 * 1024.0), driveUrl);
-    sendLog("info", "Upload Drive concluído: " + filename);
-    
-    return true;
-  } else {
-    Serial.print("Erro no upload: ");
-    Serial.println(httpCode);
-    String error = http.getString();
-    Serial.println("Resposta erro: " + error);
-    http.end();
-    
-    sendLog("error", "Upload Drive falhou (HTTP " + String(httpCode) + "): " + filename);
     return false;
   }
+  String resp = http.getString();
+  http.end();
+  StaticJsonDocument<1024> r;
+  if (deserializeJson(r, resp)) return false;
+  outBackupId = r["backup_id"].as<String>();
+  outUploadUrl = r["upload_url"].as<String>();
+  return outBackupId.length() > 0 && outUploadUrl.length() > 0;
+}
+
+bool callBackupComplete(const String& backupId, bool success, const String& err) {
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/functions/v1/device-backup-complete";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
+
+  StaticJsonDocument<256> doc;
+  doc["backup_id"] = backupId;
+  doc["success"] = success;
+  if (!success) doc["error"] = err;
+  String body; serializeJson(doc, body);
+  int code = http.POST(body);
+  http.end();
+  return code == 200;
+}
+
+String fileMd5(File& f) {
+  MD5Builder md5;
+  md5.begin();
+  const size_t BUF = 1024;
+  uint8_t buf[BUF];
+  f.seek(0);
+  while (f.available()) {
+    size_t n = f.read(buf, BUF);
+    md5.add(buf, n);
+    yield();
+  }
+  md5.calculate();
+  f.seek(0);
+  return md5.toString();
+}
+
+bool uploadFileToCloud(const String& path) {
+  if (!wifiConnected || DEVICE_TOKEN.isEmpty()) {
+    sendLog("error", "Sem conexão para upload");
+    return false;
+  }
+
+  File f = SD_MMC.open(path, FILE_READ);
+  if (!f || f.isDirectory()) { sendLog("error", "Não foi possível abrir " + path); return false; }
+  size_t total = f.size();
+  String fname = path.substring(path.lastIndexOf('/') + 1);
+
+  uploadState = "SENDING"; currentUploadFile = fname; transferActive = true;
+  sendLog("info", "Iniciando upload: " + fname);
+
+  String md5 = fileMd5(f);
+  Serial.println("MD5: " + md5);
+
+  String backupId, uploadUrl;
+  if (!callBackupInit(fname, total, md5, backupId, uploadUrl)) {
+    f.close();
+    uploadState = "ERR"; lastError = "init falhou"; transferActive = false;
+    return false;
+  }
+
+  HTTPClient http;
+  http.setTimeout(60000);
+  http.begin(uploadUrl);
+  http.addHeader("Content-Type", "application/octet-stream");
+  http.addHeader("x-upsert", "true");
+
+  int code = http.sendRequest("PUT", &f, total);
+  http.end();
+  f.close();
+
+  if (code < 200 || code >= 300) {
+    Serial.printf("upload PUT falhou: %d\\n", code);
+    callBackupComplete(backupId, false, "PUT " + String(code));
+    uploadState = "ERR"; lastError = "PUT " + String(code); transferActive = false;
+    return false;
+  }
+
+  bool ok = callBackupComplete(backupId, true, "");
+  transferActive = false;
+  if (ok) {
+    uploadState = "OK";
+    totalBackups++;
+    storageUsedMB += (long)(total / (1024.0 * 1024.0));
+    sendLog("info", "Upload concluído: " + fname);
+    if (DELETE_AFTER_TRANSFER) {
+      SD_MMC.remove(path);
+      sendLog("info", "Arquivo removido após upload: " + fname);
+    }
+  } else {
+    uploadState = "ERR"; lastError = "complete falhou";
+  }
+  return ok;
+}
+
+// ========== WATCHER DE ARQUIVOS ==========
+// Detecta término do backup quando o arquivo permanece com mesmo tamanho
+// entre dois ciclos (estável). Dispara upload sem retirar o dongle.
+void scanAndUpload() {
+  if (!SD_MMC.begin("/sdcard", true)) { usbHostActive = false; return; }
+  usbHostActive = true;
+
+  File root = SD_MMC.open("/");
+  if (!root || !root.isDirectory()) return;
+
+  std::vector<FileSnap> current;
+  File f = root.openNextFile();
+  while (f) {
+    if (!f.isDirectory()) {
+      FileSnap s;
+      s.name = String("/") + f.name();
+      s.size = f.size();
+      s.mtime = f.getLastWrite();
+      current.push_back(s);
+    }
+    f = root.openNextFile();
+  }
+  root.close();
+
+  for (auto& cur : current) {
+    bool wasPresent = false, stable = false;
+    for (auto& prev : lastSnap) {
+      if (prev.name == cur.name) {
+        wasPresent = true;
+        stable = (prev.size == cur.size) && cur.size > 0;
+        break;
+      }
+    }
+    if (wasPresent && stable) {
+      preferences.begin("uploads", false);
+      String key = cur.name + ":" + String((uint32_t)cur.size);
+      bool done = preferences.getBool(key.c_str(), false);
+      if (!done) {
+        if (uploadFileToCloud(cur.name)) {
+          preferences.putBool(key.c_str(), true);
+        }
+      }
+      preferences.end();
+    }
+  }
+  lastSnap = current;
 }
 
 // ========== LOOP PRINCIPAL ==========
 void loop() {
-  /* 
-   * INSTRUÇÕES PARA IMPLEMENTAR DETECÇÃO DE ARQUIVOS:
-   * 
-   * Este é um exemplo simplificado. Você precisa adicionar:
-   * 
-   * 1. Detecção de USB/SD Card:
-   *    - Usar biblioteca USB Host ou SD.h
-   *    - Verificar se dispositivo está conectado
-   * 
-   * 2. Listagem de arquivos:
-   *    - Ler arquivos do dispositivo USB/SD
-   *    - Filtrar por tipo (*.bkp, *.zip, etc)
-   * 
-   * 3. Leitura de arquivo:
-   *    - Abrir arquivo
-   *    - Ler conteúdo em buffer
-   *    - Obter tamanho
-   * 
-   * 4. Upload:
-   *    - Chamar uploadToGoogleDrive()
-   *    - Verificar sucesso
-   *    - Deletar se DELETE_AFTER_TRANSFER = true
-   * 
-   * EXEMPLO DE IMPLEMENTAÇÃO COM SD CARD:
-   */
-  
-  // Exemplo (você precisa adaptar para seu hardware):
-  /*
-  #include <SD.h>
-  #define SD_CS_PIN 10
-  
-  if (!SD.begin(SD_CS_PIN)) {
-    sendLog("error", "SD Card não detectado");
-    usbHostActive = false;
-  } else {
-    usbHostActive = true;
-    
-    File root = SD.open("/");
-    File file = root.openNextFile();
-    
-    while (file) {
-      if (!file.isDirectory()) {
-        String filename = file.name();
-        size_t fileSize = file.size();
-        
-        // Ler arquivo em buffer
-        uint8_t* buffer = (uint8_t*)malloc(fileSize);
-        file.read(buffer, fileSize);
-        file.close();
-        
-        // Upload para Google Drive
-        transferActive = true;
-        bool success = uploadToGoogleDrive(filename, buffer, fileSize);
-        transferActive = false;
-        
-        if (success && DELETE_AFTER_TRANSFER) {
-          SD.remove("/" + filename);
-          sendLog("info", "Arquivo deletado após upload: " + filename);
-        } else if (!success) {
-          sendLog("error", "Upload Drive falhou, arquivo mantido no SD: " + filename);
-        }
-        
-        free(buffer);
-      }
-      file = root.openNextFile();
-    }
-    root.close();
+  if (isClaimed && wifiConnected) {
+    scanAndUpload();
   }
-  */
-  
-  // Aguardar próximo ciclo
   delay(CHECK_INTERVAL * 1000);
 }
 `;
