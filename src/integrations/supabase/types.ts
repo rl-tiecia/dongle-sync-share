@@ -17,33 +17,60 @@ export type Database = {
       device_backups: {
         Row: {
           backup_type: string | null
+          content_type: string | null
           created_at: string
           destination: string | null
           device_id: string
+          duration_ms: number | null
+          error_message: string | null
           file_size_mb: number | null
           filename: string
           id: string
+          integrity_verified: boolean
+          md5_hash: string | null
+          progress: number
           status: string
+          storage_path: string | null
+          upload_completed_at: string | null
+          upload_started_at: string | null
         }
         Insert: {
           backup_type?: string | null
+          content_type?: string | null
           created_at?: string
           destination?: string | null
           device_id: string
+          duration_ms?: number | null
+          error_message?: string | null
           file_size_mb?: number | null
           filename: string
           id?: string
+          integrity_verified?: boolean
+          md5_hash?: string | null
+          progress?: number
           status?: string
+          storage_path?: string | null
+          upload_completed_at?: string | null
+          upload_started_at?: string | null
         }
         Update: {
           backup_type?: string | null
+          content_type?: string | null
           created_at?: string
           destination?: string | null
           device_id?: string
+          duration_ms?: number | null
+          error_message?: string | null
           file_size_mb?: number | null
           filename?: string
           id?: string
+          integrity_verified?: boolean
+          md5_hash?: string | null
+          progress?: number
           status?: string
+          storage_path?: string | null
+          upload_completed_at?: string | null
+          upload_started_at?: string | null
         }
         Relationships: [
           {
@@ -252,6 +279,71 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      network_destinations: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          domain: string | null
+          enabled: boolean
+          host: string
+          id: string
+          is_default: boolean
+          name: string
+          password: string | null
+          port: number | null
+          protocol: string
+          remote_path: string
+          share: string
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          domain?: string | null
+          enabled?: boolean
+          host: string
+          id?: string
+          is_default?: boolean
+          name: string
+          password?: string | null
+          port?: number | null
+          protocol: string
+          remote_path?: string
+          share: string
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          domain?: string | null
+          enabled?: boolean
+          host?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          password?: string | null
+          port?: number | null
+          protocol?: string
+          remote_path?: string
+          share?: string
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_destinations_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
