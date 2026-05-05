@@ -64,7 +64,7 @@ export default function NetworkDestinations() {
         port: Number.isFinite(parsed.data.port as number) ? parsed.data.port : null,
         user_id: user.id,
       };
-      const { error } = await supabase.from("network_destinations").insert(payload);
+      const { error } = await supabase.from("network_destinations").insert([payload]);
       if (error) throw error;
       toast.success("Destino criado");
       setForm(empty);
