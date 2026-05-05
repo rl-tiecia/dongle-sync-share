@@ -639,8 +639,187 @@ void displayStatsScreen() {
   tft.println(DEVICE_ID.substring(0, 8));
 }
 
-// ========== UPLOAD PARA GOOGLE DRIVE ==========
-bool uploadToGoogleDrive(String filename, uint8_t* fileData, size_t fileSize) {
+// ========== UPLOAD PARA LOVABLE CLOUD ==========
+bool callBackupInit(const String& filename, size_t sizeBytes, const String& md5,
+                    String& outBackupId, String& outUploadUrl) {
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/functions/v1/device-backup-init";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
+
+  StaticJsonDocument<512> doc;
+  doc["filename"] = filename;
+  doc["file_size_mb"] = sizeBytes / (1024.0 * 1024.0);
+  doc["md5_hash"] = md5;
+  doc["content_type"] = "application/octet-stream";
+
+  String body; serializeJson(doc, body);
+  int code = http.POST(body);
+  if (code != 200) {
+    Serial.printf("backup-init falhou: %d\\n", code);
+    http.end();
+    return false;
+  }
+  String resp = http.getString();
+  http.end();
+  StaticJsonDocument<1024> r;
+  if (deserializeJson(r, resp)) return false;
+  outBackupId = r["backup_id"].as<String>();
+  outUploadUrl = r["upload_url"].as<String>();
+  return outBackupId.length() > 0 && outUploadUrl.length() > 0;
+}
+
+bool callBackupComplete(const String& backupId, bool success, const String& err) {
+  HTTPClient http;
+  String url = String(SUPABASE_URL) + "/functions/v1/device-backup-complete";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Token", DEVICE_TOKEN);
+  http.addHeader("X-Device-ID", DEVICE_ID);
+
+  StaticJsonDocument<256> doc;
+  doc["backup_id"] = backupId;
+  doc["success"] = success;
+  if (!success) doc["error"] = err;
+  String body; serializeJson(doc, body);
+  int code = http.POST(body);
+  http.end();
+  return code == 200;
+}
+
+String fileMd5(File& f) {
+  MD5Builder md5;
+  md5.begin();
+  const size_t BUF = 1024;
+  uint8_t buf[BUF];
+  f.seek(0);
+  while (f.available()) {
+    size_t n = f.read(buf, BUF);
+    md5.add(buf, n);
+    yield();
+  }
+  md5.calculate();
+  f.seek(0);
+  return md5.toString();
+}
+
+bool uploadFileToCloud(const String& path) {
+  if (!wifiConnected || DEVICE_TOKEN.isEmpty()) {
+    sendLog("error", "Sem conexão para upload");
+    return false;
+  }
+
+  File f = SD_MMC.open(path, FILE_READ);
+  if (!f || f.isDirectory()) { sendLog("error", "Não foi possível abrir " + path); return false; }
+  size_t total = f.size();
+  String fname = path.substring(path.lastIndexOf('/') + 1);
+
+  uploadState = "SENDING"; currentUploadFile = fname; transferActive = true;
+  sendLog("info", "Iniciando upload: " + fname);
+
+  String md5 = fileMd5(f);
+  Serial.println("MD5: " + md5);
+
+  String backupId, uploadUrl;
+  if (!callBackupInit(fname, total, md5, backupId, uploadUrl)) {
+    f.close();
+    uploadState = "ERR"; lastError = "init falhou"; transferActive = false;
+    return false;
+  }
+
+  HTTPClient http;
+  http.setTimeout(60000);
+  http.begin(uploadUrl);
+  http.addHeader("Content-Type", "application/octet-stream");
+  http.addHeader("x-upsert", "true");
+
+  int code = http.sendRequest("PUT", &f, total);
+  http.end();
+  f.close();
+
+  if (code < 200 || code >= 300) {
+    Serial.printf("upload PUT falhou: %d\\n", code);
+    callBackupComplete(backupId, false, "PUT " + String(code));
+    uploadState = "ERR"; lastError = "PUT " + String(code); transferActive = false;
+    return false;
+  }
+
+  bool ok = callBackupComplete(backupId, true, "");
+  transferActive = false;
+  if (ok) {
+    uploadState = "OK";
+    totalBackups++;
+    storageUsedMB += (long)(total / (1024.0 * 1024.0));
+    sendLog("info", "Upload concluído: " + fname);
+    if (DELETE_AFTER_TRANSFER) {
+      SD_MMC.remove(path);
+      sendLog("info", "Arquivo removido após upload: " + fname);
+    }
+  } else {
+    uploadState = "ERR"; lastError = "complete falhou";
+  }
+  return ok;
+}
+
+// ========== WATCHER DE ARQUIVOS ==========
+// Detecta término do backup quando o arquivo permanece com mesmo tamanho
+// entre dois ciclos (estável). Dispara upload sem retirar o dongle.
+void scanAndUpload() {
+  if (!SD_MMC.begin("/sdcard", true)) { usbHostActive = false; return; }
+  usbHostActive = true;
+
+  File root = SD_MMC.open("/");
+  if (!root || !root.isDirectory()) return;
+
+  std::vector<FileSnap> current;
+  File f = root.openNextFile();
+  while (f) {
+    if (!f.isDirectory()) {
+      FileSnap s;
+      s.name = String("/") + f.name();
+      s.size = f.size();
+      s.mtime = f.getLastWrite();
+      current.push_back(s);
+    }
+    f = root.openNextFile();
+  }
+  root.close();
+
+  for (auto& cur : current) {
+    bool wasPresent = false, stable = false;
+    for (auto& prev : lastSnap) {
+      if (prev.name == cur.name) {
+        wasPresent = true;
+        stable = (prev.size == cur.size) && cur.size > 0;
+        break;
+      }
+    }
+    if (wasPresent && stable) {
+      preferences.begin("uploads", false);
+      String key = cur.name + ":" + String((uint32_t)cur.size);
+      bool done = preferences.getBool(key.c_str(), false);
+      if (!done) {
+        if (uploadFileToCloud(cur.name)) {
+          preferences.putBool(key.c_str(), true);
+        }
+      }
+      preferences.end();
+    }
+  }
+  lastSnap = current;
+}
+
+// ========== LOOP PRINCIPAL ==========
+void loop() {
+  if (isClaimed && wifiConnected) {
+    scanAndUpload();
+  }
+  delay(CHECK_INTERVAL * 1000);
+}
+`;
+}
   if (!wifiConnected) {
     sendLog("error", "WiFi desconectado, upload cancelado");
     return false;
