@@ -14,11 +14,52 @@ export type Database = {
   }
   public: {
     Tables: {
+      delivery_agents: {
+        Row: {
+          agent_token: string
+          created_at: string
+          enabled: boolean
+          id: string
+          last_seen_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_token: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_token?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       device_backups: {
         Row: {
           backup_type: string | null
           content_type: string | null
           created_at: string
+          delivered_at: string | null
+          delivered_path: string | null
+          delivery_attempts: number
+          delivery_error: string | null
+          delivery_error_code: string | null
+          delivery_last_attempt_at: string | null
+          delivery_next_attempt_at: string | null
+          delivery_status: string
           destination: string | null
           device_id: string
           duration_ms: number | null
@@ -28,6 +69,7 @@ export type Database = {
           id: string
           integrity_verified: boolean
           md5_hash: string | null
+          network_destination_id: string | null
           progress: number
           status: string
           storage_path: string | null
@@ -38,6 +80,14 @@ export type Database = {
           backup_type?: string | null
           content_type?: string | null
           created_at?: string
+          delivered_at?: string | null
+          delivered_path?: string | null
+          delivery_attempts?: number
+          delivery_error?: string | null
+          delivery_error_code?: string | null
+          delivery_last_attempt_at?: string | null
+          delivery_next_attempt_at?: string | null
+          delivery_status?: string
           destination?: string | null
           device_id: string
           duration_ms?: number | null
@@ -47,6 +97,7 @@ export type Database = {
           id?: string
           integrity_verified?: boolean
           md5_hash?: string | null
+          network_destination_id?: string | null
           progress?: number
           status?: string
           storage_path?: string | null
@@ -57,6 +108,14 @@ export type Database = {
           backup_type?: string | null
           content_type?: string | null
           created_at?: string
+          delivered_at?: string | null
+          delivered_path?: string | null
+          delivery_attempts?: number
+          delivery_error?: string | null
+          delivery_error_code?: string | null
+          delivery_last_attempt_at?: string | null
+          delivery_next_attempt_at?: string | null
+          delivery_status?: string
           destination?: string | null
           device_id?: string
           duration_ms?: number | null
@@ -66,6 +125,7 @@ export type Database = {
           id?: string
           integrity_verified?: boolean
           md5_hash?: string | null
+          network_destination_id?: string | null
           progress?: number
           status?: string
           storage_path?: string | null
