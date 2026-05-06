@@ -72,6 +72,34 @@ const Backups = () => {
     }
   };
 
+  const deliveryBadge = (b: any) => {
+    const s = b.delivery_status as string | undefined;
+    const tooltip = b.delivery_error ? ` (${b.delivery_error_code ?? "ERR"}: ${b.delivery_error})` : "";
+    switch (s) {
+      case "delivered":
+        return <Badge variant="outline" className="bg-success/10 text-success border-success/20" title={b.delivered_path ?? ""}>
+          <Network className="mr-1 h-3 w-3" />Entregue
+        </Badge>;
+      case "in_flight":
+        return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+          <UploadCloud className="mr-1 h-3 w-3" />Entregando
+        </Badge>;
+      case "pending":
+        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+          <Clock className="mr-1 h-3 w-3" />Aguardando agente
+        </Badge>;
+      case "retry":
+        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20" title={tooltip}>
+          <RefreshCw className="mr-1 h-3 w-3" />Tentando ({b.delivery_attempts ?? 0})
+        </Badge>;
+      case "failed":
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20" title={tooltip}>
+          <XCircle className="mr-1 h-3 w-3" />{b.delivery_error_code ?? "Falhou"}
+        </Badge>;
+      default:
+        return <Badge variant="outline">—</Badge>;
+    }
+  };
   if (loading) return <div className="flex items-center justify-center h-64">Carregando...</div>;
 
   return (
@@ -146,6 +174,7 @@ const Backups = () => {
                     ) : "—"}
                   </TableCell>
                   <TableCell>{statusBadge(b.status)}</TableCell>
+                  <TableCell>{deliveryBadge(b)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="sm"
