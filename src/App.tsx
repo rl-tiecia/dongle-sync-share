@@ -11,6 +11,7 @@ import { UserMenu } from "@/components/UserMenu";
 import Dashboard from "./pages/Dashboard";
 import Backups from "./pages/Backups";
 import NetworkDestinations from "./pages/NetworkDestinations";
+import DeliveryAgents from "./pages/DeliveryAgents";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
@@ -49,6 +50,7 @@ const App = () => (
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/backups" element={<Backups />} />
                           <Route path="/network" element={<NetworkDestinations />} />
+                          <Route path="/agents" element={<DeliveryAgents />} />
                           <Route path="/logs" element={<Logs />} />
                           <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
                           <Route path="/admin/devices" element={<AdminRoute><AdminDevices /></AdminRoute>} />
