@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { useDevices } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
@@ -72,6 +72,34 @@ const Backups = () => {
     }
   };
 
+  const deliveryBadge = (b: any) => {
+    const s = b.delivery_status as string | undefined;
+    const tooltip = b.delivery_error ? ` (${b.delivery_error_code ?? "ERR"}: ${b.delivery_error})` : "";
+    switch (s) {
+      case "delivered":
+        return <Badge variant="outline" className="bg-success/10 text-success border-success/20" title={b.delivered_path ?? ""}>
+          <Network className="mr-1 h-3 w-3" />Entregue
+        </Badge>;
+      case "in_flight":
+        return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+          <UploadCloud className="mr-1 h-3 w-3" />Entregando
+        </Badge>;
+      case "pending":
+        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+          <Clock className="mr-1 h-3 w-3" />Aguardando agente
+        </Badge>;
+      case "retry":
+        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20" title={tooltip}>
+          <RefreshCw className="mr-1 h-3 w-3" />Tentando ({b.delivery_attempts ?? 0})
+        </Badge>;
+      case "failed":
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20" title={tooltip}>
+          <XCircle className="mr-1 h-3 w-3" />{b.delivery_error_code ?? "Falhou"}
+        </Badge>;
+      default:
+        return <Badge variant="outline">—</Badge>;
+    }
+  };
   if (loading) return <div className="flex items-center justify-center h-64">Carregando...</div>;
 
   return (
@@ -105,13 +133,14 @@ const Backups = () => {
                 <TableHead>Data</TableHead>
                 <TableHead>Integridade</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Entrega rede</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {backups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     Nenhum backup registrado
                   </TableCell>
                 </TableRow>
@@ -145,6 +174,7 @@ const Backups = () => {
                     ) : "—"}
                   </TableCell>
                   <TableCell>{statusBadge(b.status)}</TableCell>
+                  <TableCell>{deliveryBadge(b)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="sm"

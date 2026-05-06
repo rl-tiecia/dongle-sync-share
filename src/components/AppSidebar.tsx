@@ -1,4 +1,4 @@
-import { Home, HardDrive, Settings, FileText, Users, MonitorCog, UserCircle, Network } from "lucide-react";
+import { Home, HardDrive, Settings, FileText, Users, MonitorCog, UserCircle, Network, Bot } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -17,6 +17,7 @@ const items = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Backups", url: "/backups", icon: HardDrive },
   { title: "Destinos de Rede", url: "/network", icon: Network },
+  { title: "Agentes", url: "/agents", icon: Bot },
   { title: "Logs", url: "/logs", icon: FileText },
   { title: "Meu Perfil", url: "/profile", icon: UserCircle },
   { title: "Usuários", url: "/users", icon: Users, adminOnly: true },

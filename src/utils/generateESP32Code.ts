@@ -182,9 +182,11 @@ int totalBackups = 0;
 long storageUsedMB = 0;
 
 // Estado do upload em curso (mostrado no display)
+// READY | HASHING | SENDING | MD5_OK | WAITING_DELIVERY | DELIVERED | ERR
 String currentUploadFile = "";
-String uploadState = "READY"; // READY | SENDING | OK | ERR
+String uploadState = "READY";
 String lastError = "";
+String lastErrorCode = "";
 
 // Watcher de arquivos do pendrive
 struct FileSnap { String name; size_t size; uint32_t mtime; };
@@ -565,42 +567,46 @@ void displayTransferScreen() {
   tft.println("BACKUP");
 
   tft.setTextSize(1);
-  tft.setCursor(10, 45);
-  if (uploadState == "READY") {
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.println("Pronto");
-    tft.setCursor(10, 65);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println("Aguardando arquivo");
-  } else if (uploadState == "SENDING") {
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.println("Enviando...");
-    tft.setCursor(10, 65);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(10, 40);
+
+  uint16_t color = TFT_WHITE;
+  String label = "";
+  if      (uploadState == "READY")             { color = TFT_GREEN;  label = "Pronto"; }
+  else if (uploadState == "HASHING")           { color = TFT_YELLOW; label = "Calculando MD5"; }
+  else if (uploadState == "SENDING")           { color = TFT_YELLOW; label = "Enviando..."; }
+  else if (uploadState == "MD5_OK")            { color = TFT_GREEN;  label = "MD5 verificado"; }
+  else if (uploadState == "WAITING_DELIVERY")  { color = TFT_CYAN;   label = "Aguardando entrega"; }
+  else if (uploadState == "DELIVERED")         { color = TFT_GREEN;  label = "Entregue no share"; }
+  else                                         { color = TFT_RED;    label = "ERRO"; }
+
+  tft.setTextColor(color, TFT_BLACK);
+  tft.println(label);
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(10, 60);
+  if (currentUploadFile.length() > 0) {
     tft.println(currentUploadFile.substring(0, 18));
     if (currentUploadFile.length() > 18) {
-      tft.setCursor(10, 80);
+      tft.setCursor(10, 75);
       tft.println(currentUploadFile.substring(18, 36));
     }
-  } else if (uploadState == "OK") {
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.println("Sucesso");
-    tft.setCursor(10, 65);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println(currentUploadFile.substring(0, 18));
   } else {
-    tft.setTextColor(TFT_RED, TFT_BLACK);
-    tft.println("ERRO");
-    tft.setCursor(10, 65);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.println(lastError.substring(0, 18));
+    tft.println("Aguardando arquivo");
   }
 
-  tft.setCursor(10, 115);
+  if (uploadState == "ERR") {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.setCursor(10, 95);
+    tft.print("Cod: "); tft.println(lastErrorCode.substring(0, 14));
+    tft.setCursor(10, 108);
+    tft.println(lastError.substring(0, 20));
+  }
+
+  tft.setCursor(10, 125);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.print("Destino: ");
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.println("Cloud");
+  tft.println("Cloud + Share");
 }
 
 void displayStatsScreen() {
@@ -716,7 +722,7 @@ bool uploadFileToCloud(const String& path) {
   size_t total = f.size();
   String fname = path.substring(path.lastIndexOf('/') + 1);
 
-  uploadState = "SENDING"; currentUploadFile = fname; transferActive = true;
+  uploadState = "HASHING"; currentUploadFile = fname; transferActive = true;
   sendLog("info", "Iniciando upload: " + fname);
 
   String md5 = fileMd5(f);
@@ -725,9 +731,11 @@ bool uploadFileToCloud(const String& path) {
   String backupId, uploadUrl;
   if (!callBackupInit(fname, total, md5, backupId, uploadUrl)) {
     f.close();
-    uploadState = "ERR"; lastError = "init falhou"; transferActive = false;
+    uploadState = "ERR"; lastError = "init falhou"; lastErrorCode = "INIT_FAIL"; transferActive = false;
     return false;
   }
+
+  uploadState = "SENDING";
 
   HTTPClient http;
   http.setTimeout(60000);
@@ -742,23 +750,26 @@ bool uploadFileToCloud(const String& path) {
   if (code < 200 || code >= 300) {
     Serial.printf("upload PUT falhou: %d\\n", code);
     callBackupComplete(backupId, false, "PUT " + String(code));
-    uploadState = "ERR"; lastError = "PUT " + String(code); transferActive = false;
+    uploadState = "ERR"; lastError = "PUT " + String(code);
+    lastErrorCode = "PUT_" + String(code); transferActive = false;
     return false;
   }
+
+  uploadState = "MD5_OK";
 
   bool ok = callBackupComplete(backupId, true, "");
   transferActive = false;
   if (ok) {
-    uploadState = "OK";
+    uploadState = "WAITING_DELIVERY";
     totalBackups++;
     storageUsedMB += (long)(total / (1024.0 * 1024.0));
-    sendLog("info", "Upload concluído: " + fname);
+    sendLog("info", "Upload concluído: " + fname + " — aguardando entrega no share");
     if (DELETE_AFTER_TRANSFER) {
       SD_MMC.remove(path);
       sendLog("info", "Arquivo removido após upload: " + fname);
     }
   } else {
-    uploadState = "ERR"; lastError = "complete falhou";
+    uploadState = "ERR"; lastError = "complete falhou"; lastErrorCode = "COMPLETE_FAIL";
   }
   return ok;
 }

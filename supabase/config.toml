@@ -2,3 +2,9 @@ project_id = "cofvhqmkekclgdbxadgn"
 
 [functions.seed-admin]
 verify_jwt = false
+
+[functions.agent-claim-jobs]
+verify_jwt = false
+
+[functions.agent-report-delivery]
+verify_jwt = false
