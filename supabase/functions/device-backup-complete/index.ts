@@ -78,8 +78,34 @@ Deno.serve(async (req) => {
     const startedAt = backup.upload_started_at ? new Date(backup.upload_started_at) : null
     const durationMs = startedAt ? completedAt.getTime() - startedAt.getTime() : null
 
+    const finalStatus = integrityOk ? 'completed' : (backup.md5_hash ? 'failed' : 'completed')
+
+    // If completed, enqueue delivery when the device owner has an enabled
+    // network_destination. Otherwise leave delivery_status='not_required'.
+    let deliveryStatus: string = 'not_required'
+    let nextAttempt: string | null = null
+    let destId: string | null = null
+    if (finalStatus === 'completed') {
+      const { data: dev } = await supabase
+        .from('devices').select('user_id').eq('id', backup.device_id).maybeSingle()
+      if (dev?.user_id) {
+        const { data: dest } = await supabase
+          .from('network_destinations')
+          .select('id')
+          .eq('user_id', dev.user_id)
+          .eq('enabled', true)
+          .order('is_default', { ascending: false })
+          .limit(1).maybeSingle()
+        if (dest) {
+          deliveryStatus = 'pending'
+          nextAttempt = new Date().toISOString()
+          destId = dest.id
+        }
+      }
+    }
+
     await supabase.from('device_backups').update({
-      status: integrityOk ? 'completed' : (backup.md5_hash ? 'failed' : 'completed'),
+      status: finalStatus,
       integrity_verified: integrityOk,
       upload_completed_at: completedAt.toISOString(),
       duration_ms: durationMs,
@@ -87,9 +113,12 @@ Deno.serve(async (req) => {
       error_message: integrityOk || !backup.md5_hash
         ? null
         : `MD5 mismatch (server=${serverMd5})`,
+      delivery_status: deliveryStatus,
+      delivery_next_attempt_at: nextAttempt,
+      network_destination_id: destId,
     }).eq('id', backup.id)
 
-    return json({ success: true, integrity_verified: integrityOk })
+    return json({ success: true, integrity_verified: integrityOk, delivery_status: deliveryStatus })
   } catch (e) {
     console.error('device-backup-complete error', e)
     return json({ error: 'Internal error' }, 500)
