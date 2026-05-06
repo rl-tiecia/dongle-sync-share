@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { useDevices } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
