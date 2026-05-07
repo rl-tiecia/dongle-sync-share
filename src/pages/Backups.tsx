@@ -3,17 +3,44 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle, Ban, PlayCircle, ListTree } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { useDevices } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { toast } from "sonner";
+import { BackupDeliveryDetails } from "@/components/BackupDeliveryDetails";
 
 const Backups = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const [backups, setBackups] = useState<any[]>([]);
+  const [detailsBackup, setDetailsBackup] = useState<any | null>(null);
+
+  const cancelDelivery = async (b: any) => {
+    const { error } = await supabase.from("device_backups").update({
+      delivery_status: "cancelled",
+      delivery_next_attempt_at: null,
+    }).eq("id", b.id);
+    if (error) { toast.error("Falha ao cancelar"); return; }
+    await supabase.from("delivery_attempts").insert({
+      backup_id: b.id, attempt_number: b.delivery_attempts ?? 0, status: "cancelled",
+    });
+    toast.success("Entrega cancelada");
+    fetchBackups();
+  };
+
+  const reactivateDelivery = async (b: any) => {
+    const { error } = await supabase.from("device_backups").update({
+      delivery_status: "pending",
+      delivery_next_attempt_at: new Date().toISOString(),
+      delivery_error: null,
+      delivery_error_code: null,
+    }).eq("id", b.id);
+    if (error) { toast.error("Falha ao reativar"); return; }
+    toast.success("Entrega reativada");
+    fetchBackups();
+  };
 
   const fetchBackups = async () => {
     if (!selectedDevice) return;
@@ -96,6 +123,10 @@ const Backups = () => {
         return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20" title={tooltip}>
           <XCircle className="mr-1 h-3 w-3" />{b.delivery_error_code ?? "Falhou"}
         </Badge>;
+      case "cancelled":
+        return <Badge variant="outline" className="bg-muted text-muted-foreground">
+          <Ban className="mr-1 h-3 w-3" />Cancelada
+        </Badge>;
       default:
         return <Badge variant="outline">—</Badge>;
     }
@@ -176,14 +207,29 @@ const Backups = () => {
                   <TableCell>{statusBadge(b.status)}</TableCell>
                   <TableCell>{deliveryBadge(b)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownload(b)}
-                      disabled={!b.storage_path || b.status !== "completed"}
-                    >
-                      <Download className="h-3 w-3 mr-1" /> Baixar
-                    </Button>
+                    <div className="flex justify-end gap-1 flex-wrap">
+                      <Button size="sm" variant="ghost" onClick={() => setDetailsBackup(b)} title="Ver tentativas">
+                        <ListTree className="h-3 w-3" />
+                      </Button>
+                      {["pending", "retry", "failed"].includes(b.delivery_status) && (
+                        <Button size="sm" variant="ghost" onClick={() => cancelDelivery(b)} title="Cancelar entrega">
+                          <Ban className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {["cancelled", "failed"].includes(b.delivery_status) && (
+                        <Button size="sm" variant="ghost" onClick={() => reactivateDelivery(b)} title="Reativar entrega">
+                          <PlayCircle className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(b)}
+                        disabled={!b.storage_path || b.status !== "completed"}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Baixar
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -191,6 +237,12 @@ const Backups = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <BackupDeliveryDetails
+        backup={detailsBackup}
+        open={!!detailsBackup}
+        onOpenChange={(o) => !o && setDetailsBackup(null)}
+      />
     </div>
   );
 };
