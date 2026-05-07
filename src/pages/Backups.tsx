@@ -15,6 +15,32 @@ import { BackupDeliveryDetails } from "@/components/BackupDeliveryDetails";
 const Backups = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
   const [backups, setBackups] = useState<any[]>([]);
+  const [detailsBackup, setDetailsBackup] = useState<any | null>(null);
+
+  const cancelDelivery = async (b: any) => {
+    const { error } = await supabase.from("device_backups").update({
+      delivery_status: "cancelled",
+      delivery_next_attempt_at: null,
+    }).eq("id", b.id);
+    if (error) { toast.error("Falha ao cancelar"); return; }
+    await supabase.from("delivery_attempts").insert({
+      backup_id: b.id, attempt_number: b.delivery_attempts ?? 0, status: "cancelled",
+    });
+    toast.success("Entrega cancelada");
+    fetchBackups();
+  };
+
+  const reactivateDelivery = async (b: any) => {
+    const { error } = await supabase.from("device_backups").update({
+      delivery_status: "pending",
+      delivery_next_attempt_at: new Date().toISOString(),
+      delivery_error: null,
+      delivery_error_code: null,
+    }).eq("id", b.id);
+    if (error) { toast.error("Falha ao reativar"); return; }
+    toast.success("Entrega reativada");
+    fetchBackups();
+  };
 
   const fetchBackups = async () => {
     if (!selectedDevice) return;
