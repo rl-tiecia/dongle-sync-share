@@ -207,14 +207,29 @@ const Backups = () => {
                   <TableCell>{statusBadge(b.status)}</TableCell>
                   <TableCell>{deliveryBadge(b)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownload(b)}
-                      disabled={!b.storage_path || b.status !== "completed"}
-                    >
-                      <Download className="h-3 w-3 mr-1" /> Baixar
-                    </Button>
+                    <div className="flex justify-end gap-1 flex-wrap">
+                      <Button size="sm" variant="ghost" onClick={() => setDetailsBackup(b)} title="Ver tentativas">
+                        <ListTree className="h-3 w-3" />
+                      </Button>
+                      {["pending", "retry", "failed"].includes(b.delivery_status) && (
+                        <Button size="sm" variant="ghost" onClick={() => cancelDelivery(b)} title="Cancelar entrega">
+                          <Ban className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {["cancelled", "failed"].includes(b.delivery_status) && (
+                        <Button size="sm" variant="ghost" onClick={() => reactivateDelivery(b)} title="Reativar entrega">
+                          <PlayCircle className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(b)}
+                        disabled={!b.storage_path || b.status !== "completed"}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Baixar
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -222,6 +237,12 @@ const Backups = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <BackupDeliveryDetails
+        backup={detailsBackup}
+        open={!!detailsBackup}
+        onOpenChange={(o) => !o && setDetailsBackup(null)}
+      />
     </div>
   );
 };
