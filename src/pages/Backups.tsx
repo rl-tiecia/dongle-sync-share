@@ -123,6 +123,10 @@ const Backups = () => {
         return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20" title={tooltip}>
           <XCircle className="mr-1 h-3 w-3" />{b.delivery_error_code ?? "Falhou"}
         </Badge>;
+      case "cancelled":
+        return <Badge variant="outline" className="bg-muted text-muted-foreground">
+          <Ban className="mr-1 h-3 w-3" />Cancelada
+        </Badge>;
       default:
         return <Badge variant="outline">—</Badge>;
     }
