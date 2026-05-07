@@ -47,6 +47,45 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_attempts: {
+        Row: {
+          agent_id: string | null
+          attempt_number: number
+          backup_id: string
+          created_at: string
+          delivered_path: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          next_attempt_at: string | null
+          status: string
+        }
+        Insert: {
+          agent_id?: string | null
+          attempt_number: number
+          backup_id: string
+          created_at?: string
+          delivered_path?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          next_attempt_at?: string | null
+          status: string
+        }
+        Update: {
+          agent_id?: string | null
+          attempt_number?: number
+          backup_id?: string
+          created_at?: string
+          delivered_path?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          next_attempt_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       device_backups: {
         Row: {
           backup_type: string | null
