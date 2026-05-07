@@ -3,13 +3,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Download, ShieldCheck, ShieldAlert, UploadCloud, Network, RefreshCw, XCircle, Ban, PlayCircle, ListTree } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { useDevices } from "@/hooks/useDevices";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { toast } from "sonner";
+import { BackupDeliveryDetails } from "@/components/BackupDeliveryDetails";
 
 const Backups = () => {
   const { devices, selectedDevice, setSelectedDevice, loading, refetch } = useDevices();
