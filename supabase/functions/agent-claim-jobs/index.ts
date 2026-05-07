@@ -49,22 +49,27 @@ Deno.serve(async (req) => {
       .select('id, device_id, filename, file_size_mb, storage_path, md5_hash, network_destination_id, delivery_attempts')
       .in('device_id', deviceIds)
       .in('delivery_status', ['pending', 'retry'])
-      .lte('delivery_next_attempt_at', nowIso)
+      .or(`delivery_next_attempt_at.is.null,delivery_next_attempt_at.lte.${nowIso}`)
       .order('delivery_next_attempt_at', { ascending: true })
       .limit(MAX_JOBS)
 
     if (!rows || rows.length === 0) return json({ jobs: [] })
 
-    // Mark in-flight to avoid duplicate work
-    const ids = rows.map((r) => r.id)
-    await supabase
-      .from('device_backups')
-      .update({
+    // Mark in-flight to avoid duplicate work + log per-row attempt
+    for (const r of rows) {
+      const nextAttempt = (r.delivery_attempts ?? 0) + 1
+      await supabase.from('device_backups').update({
         delivery_status: 'in_flight',
         delivery_last_attempt_at: nowIso,
-        delivery_attempts: (rows[0]?.delivery_attempts ?? 0) + 1,
+        delivery_attempts: nextAttempt,
+      }).eq('id', r.id)
+      await supabase.from('delivery_attempts').insert({
+        backup_id: r.id,
+        attempt_number: nextAttempt,
+        status: 'in_flight',
+        agent_id: agent.id,
       })
-      .in('id', ids)
+    }
 
     // Build response per job
     const jobs = []

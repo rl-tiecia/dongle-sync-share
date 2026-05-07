@@ -39,15 +39,20 @@ Deno.serve(async (req) => {
     // Confirm backup belongs to a device owned by the agent's user
     const { data: backup } = await supabase
       .from('device_backups')
-      .select('id, device_id, delivery_attempts')
+      .select('id, device_id, delivery_attempts, delivery_status')
       .eq('id', backupId)
       .maybeSingle()
     if (!backup) return json({ error: 'Backup not found' }, 404)
+    if (backup.delivery_status === 'cancelled') {
+      return json({ ok: true, cancelled: true })
+    }
     const { data: dev } = await supabase
       .from('devices').select('user_id').eq('id', backup.device_id).maybeSingle()
     if (!dev || dev.user_id !== agent.user_id) return json({ error: 'Forbidden' }, 403)
 
     const nowIso = new Date().toISOString()
+
+    const attempts = backup.delivery_attempts ?? 0
 
     if (success) {
       await supabase.from('device_backups').update({
@@ -58,10 +63,13 @@ Deno.serve(async (req) => {
         delivery_error_code: null,
         delivery_next_attempt_at: null,
       }).eq('id', backup.id)
+      await supabase.from('delivery_attempts').insert({
+        backup_id: backup.id, attempt_number: attempts, status: 'success',
+        delivered_path: deliveredPath, agent_id: agent.id,
+      })
       return json({ ok: true })
     }
 
-    const attempts = backup.delivery_attempts ?? 0
     if (attempts >= MAX_ATTEMPTS) {
       await supabase.from('device_backups').update({
         delivery_status: 'failed',
@@ -69,6 +77,10 @@ Deno.serve(async (req) => {
         delivery_error_code: errorCode,
         delivery_next_attempt_at: null,
       }).eq('id', backup.id)
+      await supabase.from('delivery_attempts').insert({
+        backup_id: backup.id, attempt_number: attempts, status: 'error',
+        error_code: errorCode, error_message: errorMsg, agent_id: agent.id,
+      })
       return json({ ok: true, retried: false })
     }
 
@@ -80,6 +92,10 @@ Deno.serve(async (req) => {
       delivery_error_code: errorCode,
       delivery_next_attempt_at: next,
     }).eq('id', backup.id)
+    await supabase.from('delivery_attempts').insert({
+      backup_id: backup.id, attempt_number: attempts, status: 'error',
+      error_code: errorCode, error_message: errorMsg, next_attempt_at: next, agent_id: agent.id,
+    })
 
     return json({ ok: true, retried: true, next_attempt_at: next })
   } catch (e) {
