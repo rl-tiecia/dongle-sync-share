@@ -136,17 +136,26 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Monitoramento em tempo real dos dispositivos T-Dongle S3
-          </p>
+      <div className="relative overflow-hidden rounded-[var(--radius)] glass-card p-6 sm:p-8 animate-slide-up">
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-primary font-semibold mb-2">Painel Principal</p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              Olá, <span className="gradient-text">monitoramento ativo</span>
+            </h1>
+            <p className="text-muted-foreground mt-2 max-w-xl">
+              Acompanhe em tempo real seus dispositivos T-Dongle S3, backups e entregas.
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowAddDevice(true)}
+            className="bg-gradient-primary hover:opacity-90 shadow-glow"
+          >
+            <Link className="mr-2 h-4 w-4" />
+            Adicionar Dispositivo
+          </Button>
         </div>
-        <Button onClick={() => setShowAddDevice(true)}>
-          <Link className="mr-2 h-4 w-4" />
-          Adicionar Dispositivo
-        </Button>
       </div>
 
       {/* Device Selector */}
