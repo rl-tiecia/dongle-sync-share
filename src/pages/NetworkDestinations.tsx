@@ -43,7 +43,7 @@ export default function NetworkDestinations() {
       .from("network_destinations")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) toast.error(error.message);
+    if (error) showSupabaseError(error);
     else setItems(data || []);
   };
 
@@ -80,7 +80,7 @@ export default function NetworkDestinations() {
       setForm(empty);
       fetchItems();
     } catch (e: any) {
-      toast.error(e.message);
+      showSupabaseError(e);
     } finally {
       setSaving(false);
     }
@@ -88,7 +88,7 @@ export default function NetworkDestinations() {
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("network_destinations").delete().eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) showSupabaseError(error);
     else { toast.success("Removido"); fetchItems(); }
   };
 
@@ -97,7 +97,7 @@ export default function NetworkDestinations() {
       .from("network_destinations")
       .update({ enabled: !row.enabled })
       .eq("id", row.id);
-    if (error) toast.error(error.message);
+    if (error) showSupabaseError(error);
     else fetchItems();
   };
 
