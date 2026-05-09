@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Plus, Bot, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { showSupabaseError } from "@/lib/supabaseError";
 
 function generateToken() {
   const arr = new Uint8Array(32);
