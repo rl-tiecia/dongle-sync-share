@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit_log: {
+        Row: {
+          context: Json | null
+          created_at: string
+          function_name: string
+          granted: boolean
+          id: string
+          reason: string | null
+          resource_id: string | null
+          resource_type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          function_name: string
+          granted: boolean
+          id?: string
+          reason?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          function_name?: string
+          granted?: boolean
+          id?: string
+          reason?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       delivery_agents: {
         Row: {
           agent_token: string
@@ -498,7 +534,15 @@ export type Database = {
         Args: { _device_id: string; _user_id: string }
         Returns: boolean
       }
+      can_access_device_audited: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_edit_device: {
+        Args: { _device_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_edit_device_audited: {
         Args: { _device_id: string; _user_id: string }
         Returns: boolean
       }
@@ -508,6 +552,18 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_access_check: {
+        Args: {
+          _context?: Json
+          _function: string
+          _granted: boolean
+          _reason: string
+          _resource_id: string
+          _resource_type: string
+          _user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
