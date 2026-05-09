@@ -1,113 +1,89 @@
+# Plano: Segurança, Auditoria e Gestão de Permissões
 
-# Redesign completo — Glassmorphism Premium
+## 1. Testes automatizados de RLS (`has_role`, `can_edit_device`, `can_access_device`)
 
-Refaz a camada visual de todo o sistema sem alterar lógica de negócio, hooks, edge functions, schema de banco ou firmware. Todas as páginas existentes continuam funcionando exatamente como hoje — só mudam tokens, layout shell, componentes de UI e composição visual.
+Criar uma edge function de teste **`rls-test-suite`** (executável apenas por admin) que:
+- Cria 3 usuários temporários via Service Role: `admin_test`, `editor_test`, `viewer_test`
+- Cria 1 device de teste, atribui permissões `editor` e `viewer`
+- Para cada usuário, gera um JWT e executa um cliente Supabase com `anon key + Authorization: Bearer <jwt>` chamando:
+  - `rpc('has_role', { _user_id, _role })` para cada role
+  - `rpc('can_access_device', ...)` e `rpc('can_edit_device', ...)` no device de teste e em um device alheio
+  - `SELECT` em `devices`, `device_backups`, `network_destinations` para confirmar visibilidade
+  - `UPDATE` em `devices` para confirmar bloqueio do viewer
+- Coleta resultados (esperado vs. obtido) e retorna JSON `{ passed, failed, details[] }`
+- Limpa todos os recursos criados (rollback) ao final, mesmo em erro
+- Acessível via botão "Rodar testes RLS" na nova tela de gestão (item 5)
 
-## 1. Design System (base de tudo)
+## 2. Script de CI para validar GRANTs e policies
 
-Atualizar `src/index.css` e `tailwind.config.ts` com novos tokens semânticos (HSL):
+Criar `scripts/ci-rls-check.ts` (Deno) e `scripts/ci-rls-check.md`:
+- Lê `supabase/migrations/*.sql` e extrai todas as `CREATE POLICY` e `GRANT EXECUTE`
+- Confere via `supabase--read_query` (em runtime) ou via consulta a `pg_policies` / `pg_proc`:
+  - Toda tabela em `public` tem RLS habilitada
+  - Todas as funções `SECURITY DEFINER` referenciadas em policies têm `GRANT EXECUTE TO authenticated`
+  - Nenhuma policy tem `USING (true)` para `SELECT` em tabelas com colunas sensíveis (lista configurável)
+- Sai com código `1` se houver violação
+- Documentação no `.md` explica como rodar localmente: `deno run --allow-net --allow-env scripts/ci-rls-check.ts` e como integrar em GitHub Actions (snippet YAML pronto)
 
-- **Paleta**: azul primário mantido (217 91% 60%), com novo "primary-glow" (217 100% 70%) e accents complementares (cyan, violet sutil para gradientes).
-- **Surfaces (glass)**:
-  - `--glass-bg`: branco translúcido no light, slate translúcido no dark
-  - `--glass-border`: borda sutil com alpha
-  - `--glass-highlight`: brilho superior do card
-- **Backgrounds com mesh**: gradiente radial multi-stop animado lentamente atrás de tudo (azul → cyan → violet com baixa opacidade), diferente para light/dark.
-- **Tokens novos**:
-  - `--gradient-mesh`, `--gradient-primary` (refinado), `--gradient-border` (para borda gradiente em cards de destaque)
-  - `--shadow-glass`, `--shadow-elevated`, `--shadow-glow` (refinado)
-  - `--blur-glass: 20px`
-- **Tipografia**: importar Inter (400/500/600/700) e usar `font-display` com `tracking-tight` em headings.
-- **Animações**: adicionar `fade-in`, `scale-in`, `slide-up`, `shimmer`, `float`, `glow-pulse` ao Tailwind config.
+## 3. Auditoria de acessos negados
 
-## 2. Componentes de UI base (variantes, não substituições)
+Nova tabela **`access_audit_log`**:
+- `user_id`, `function_name`, `resource_type`, `resource_id`, `granted` (bool), `reason`, `context` (jsonb), `created_at`
+- RLS: somente admin pode ler; insert via SECURITY DEFINER
 
-Adicionar variantes glass aos componentes shadcn já usados, sem quebrar chamadas existentes:
+Nova função **`log_access_check(_user_id, _function, _resource_type, _resource_id, _granted, _reason)`** (SECURITY DEFINER) que insere no log.
 
-- `Card`: nova classe utilitária `.glass-card` aplicada via prop `variant` (default mantém atual).
-- `Button`: variantes novas `glass`, `premium` (gradiente + glow no hover).
-- `Badge`: variantes `glass-success`, `glass-warning`, `glass-info`, `glass-destructive` com fundo translúcido + borda colorida.
-- `Input`/`Select`/`Textarea`: tratamento glass (bg translúcido, borda sutil, focus ring com glow).
-- Novo helper `src/components/ui/glass-panel.tsx` para painéis grandes.
-- Novo `src/components/ui/animated-background.tsx` com mesh gradient animado para o shell.
-- Novo `src/components/ui/stat-card.tsx` substituindo visualmente o `StatusCard` atual (mesma API: title, value, icon, variant, subtitle) com:
-  - borda gradiente sutil
-  - ícone em "pill" colorido
-  - micro animação de entrada
-  - sparkline opcional
+Versões "auditadas" das funções existentes:
+- `can_access_device_audited(_user_id, _device_id)` → chama `can_access_device` e registra resultado com motivo (`owner`, `permission`, `admin`, `denied:no_access`)
+- `can_edit_device_audited(_user_id, _device_id)` → idem com motivos (`owner`, `editor_permission`, `admin`, `denied:viewer_only`, `denied:no_access`)
 
-## 3. App Shell (layout principal)
+Estas funções **não substituem** as policies (para não impactar performance), mas podem ser invocadas explicitamente por edge functions sensíveis (ex: `device-backup-init`, `agent-claim-jobs`) para registrar tentativas.
 
-Redesenhar o shell em `src/App.tsx`:
+## 4. Tratamento de erros claros para falhas de RLS/permissão
 
-- Topbar fixa com blur (sticky, backdrop-blur), contendo: SidebarTrigger, breadcrumb dinâmico (baseado na rota), busca global (placeholder visual), toggle de tema (sol/lua), `UserMenu`.
-- Sidebar (`src/components/AppSidebar.tsx`) repaginada:
-  - fundo glass no dark, contraste melhor no light
-  - logo no topo com pequeno glow
-  - itens com ícone em container, indicador ativo com barra gradiente + leve glow
-  - separador "Admin" para itens `adminOnly`
-  - rodapé com versão e status de conexão
-- `AnimatedBackground` cobrindo a área de conteúdo (mesh gradient + grão sutil).
-- Container de conteúdo com `max-w-7xl`, padding responsivo, animação de entrada por rota (`animate-fade-in`).
+Criar utilitário frontend `src/lib/supabaseError.ts`:
+- `parseSupabaseError(error)` → retorna `{ title, message, code, isPermission }`
+- Detecta:
+  - `42501` (insufficient privilege) → "Sem permissão para esta operação"
+  - `permission denied for function X` → "Acesso negado à função X. Verifique seu papel."
+  - `new row violates row-level security policy` → "Você não tem permissão para criar/editar este registro"
+  - `JWT expired` → "Sessão expirada, faça login novamente"
+- Hook `useSupabaseErrorToast()` que padroniza `toast.error(...)` em todas as chamadas
+- Refatorar 4-5 chamadas críticas em `Backups.tsx`, `NetworkDestinations.tsx`, `DeliveryAgents.tsx`, `AdminDevices.tsx` para usar o helper
 
-## 4. Toggle de tema
+## 5. Tela de gestão de roles e permissões
 
-- Adicionar `next-themes` (já comum em projetos shadcn) ou implementar provider próprio simples em `src/components/ThemeProvider.tsx` com `localStorage` + classe `dark` no `<html>`.
-- Componente `src/components/ThemeToggle.tsx` (Sun/Moon com transição suave) na topbar.
-- Default: respeitar `prefers-color-scheme`.
+Nova rota `/permissions` (admin only), no sidebar dentro do grupo "Admin":
+- **Aba "Por Usuário"**: lista todos os usuários (`profiles` + `user_roles`), mostra:
+  - Nome, email, role atual (badge)
+  - Dropdown para mudar role (chama `update-user-role`)
+  - Expansível: lista de devices que possui + devices compartilhados com ele
+- **Aba "Por Dispositivo"**: lista todos os devices, mostra:
+  - Nome, owner, lista de usuários compartilhados com nível
+  - Botão para abrir `DeviceShareDialog` existente
+- **Aba "Auditoria"**: tabela paginada do `access_audit_log` com filtros (usuário, função, granted/denied, range de data)
+- **Aba "Testes RLS"**: botão "Rodar testes" → invoca `rls-test-suite` e mostra resultado em cards (verde/vermelho por caso)
 
-## 5. Páginas — repaginação visual
+## Arquivos novos
+- `supabase/functions/rls-test-suite/index.ts`
+- `supabase/migrations/<ts>_audit_log.sql` (tabela + funções auditadas)
+- `scripts/ci-rls-check.ts` + `scripts/ci-rls-check.md`
+- `src/lib/supabaseError.ts`
+- `src/pages/Permissions.tsx`
+- `src/components/permissions/UsersTab.tsx`
+- `src/components/permissions/DevicesTab.tsx`
+- `src/components/permissions/AuditTab.tsx`
+- `src/components/permissions/RlsTestsTab.tsx`
 
-Para cada página, manter 100% da lógica/dados/handlers; só mudar JSX/classes:
+## Arquivos editados
+- `src/App.tsx` (rota `/permissions`)
+- `src/components/AppSidebar.tsx` (item de menu)
+- `src/integrations/supabase/types.ts` (auto)
+- `supabase/config.toml` (registrar nova edge function)
+- `src/pages/{Backups,NetworkDestinations,DeliveryAgents,AdminDevices}.tsx` (uso do helper de erros)
 
-- **Dashboard** (`src/pages/Dashboard.tsx`): hero header com gradiente, novos `StatCard` em grid responsivo, painel "Backup em andamento" com barra de progresso animada e shimmer, "Status do Dispositivo" como lista com ícones em pílulas, "Atividade Recente" como timeline glass, charts dentro de glass-panel.
-- **Backups** (`src/pages/Backups.tsx`): tabela em glass-card, badges glass para status/entrega, botões de ação em ícones com tooltip, painel lateral (`BackupDeliveryDetails`) já em sheet — repaginar com glass.
-- **NetworkDestinations**, **DeliveryAgents**, **Logs**, **AdminDevices**, **Users**, **Profile**, **Settings**: mesmo tratamento — header consistente (título + descrição + ação primária), conteúdo em glass-panels, tabelas/listas com hover sutil.
-- **Auth** (`src/pages/Auth.tsx`): split visual — lado esquerdo com mesh gradient + branding "T-Dongle S3 Monitor", direito com card glass de login.
-- **NotFound**: visual coerente com glass + ilustração textual.
-
-## 6. Microinterações
-
-- Hover em cards: leve elevação (`translate-y-[-2px]`) + sombra glow.
-- Itens de sidebar ativos: barra gradiente animada.
-- Skeletons com shimmer real (gradiente animado).
-- Toasts (sonner): tema customizado glass.
-- Badges de status com pulse sutil quando "ativo/em tempo real".
-
-## 7. Acessibilidade & responsividade
-
-- Contraste AA garantido em ambos os temas (testar tokens glass com texto).
-- Focus rings visíveis (ring com cor primária + offset).
-- Sidebar colapsa para drawer em mobile (já usa shadcn sidebar — manter).
-- Topbar e tabelas com tratamento mobile (scroll horizontal em tabelas, ações em menu).
-
-## 8. Detalhes técnicos (seção para devs)
-
-```text
-Arquivos novos:
-  src/components/ThemeProvider.tsx
-  src/components/ThemeToggle.tsx
-  src/components/ui/glass-panel.tsx
-  src/components/ui/stat-card.tsx
-  src/components/ui/animated-background.tsx
-  src/components/AppTopbar.tsx
-  src/components/RouteBreadcrumb.tsx
-
-Arquivos editados (apenas visual):
-  src/index.css                  → tokens glass, mesh, fontes, animações
-  tailwind.config.ts             → keyframes/animation, fontFamily, novas cores semânticas
-  src/App.tsx                    → shell com topbar + animated bg + ThemeProvider
-  src/components/AppSidebar.tsx  → glass + indicador ativo + grupos
-  src/components/StatusCard.tsx  → reusa stat-card por baixo (API mantida)
-  src/pages/*.tsx                → repaginação JSX/classes, sem mudar lógica
-  src/components/ui/{button,badge,card,input}.tsx → adicionar variantes glass
-
-Sem alterações em:
-  hooks/, integrations/, supabase/, agent/, utils/generateESP32Code.ts, schema do banco.
-```
-
-Dependência opcional: `next-themes` (leve, padrão em apps shadcn). Caso prefira evitar, uso provider próprio.
-
-## Resultado esperado
-
-Um sistema com identidade visual premium, glass coerente em todas as telas, suporte fluido a dark/light, microinterações sutis e zero regressão funcional.
+## Detalhes técnicos
+- A edge function `rls-test-suite` usa **dois clientes**: um com `SERVICE_ROLE_KEY` para setup/teardown e outro com `ANON_KEY + Authorization` por usuário testado, para que as policies sejam realmente avaliadas.
+- O script de CI usa o tool `supabase--read_query` em ambiente Lovable; fora do Lovable, fallback para `psql` via `PGHOST`.
+- O `access_audit_log` tem índice em `(user_id, created_at DESC)` e `(function_name, granted)`.
+- A tela `/permissions` reaproveita componentes glass do design system atual.
