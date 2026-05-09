@@ -1,4 +1,4 @@
-import { Home, HardDrive, Settings, FileText, Users, MonitorCog, UserCircle, Network, Bot, Zap } from "lucide-react";
+import { Home, HardDrive, Settings, FileText, Users, MonitorCog, UserCircle, Network, Bot, Zap, Shield } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -29,6 +29,7 @@ const accountItems = [
 const adminItems = [
   { title: "Usuários", url: "/users", icon: Users },
   { title: "Dispositivos", url: "/admin/devices", icon: MonitorCog },
+  { title: "Roles & Permissões", url: "/permissions", icon: Shield },
 ];
 
 export function AppSidebar() {
