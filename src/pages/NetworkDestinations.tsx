@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Plus, Network } from "lucide-react";
 import { toast } from "sonner";
+import { showSupabaseError } from "@/lib/supabaseError";
 import { z } from "zod";
 
 const schema = z.object({
